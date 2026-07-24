@@ -1,9 +1,11 @@
 import datetime
+import hashlib
 import pathlib
 import time
 from abc import ABC, abstractmethod
 from functools import cached_property
 from logging import getLogger
+from typing import Literal
 
 from competitive_verifier import git, log
 from competitive_verifier.download import download_files as run_download
@@ -27,10 +29,14 @@ def _now() -> datetime.datetime:
     return datetime.datetime.now(datetime.timezone.utc).astimezone()
 
 
+PrevResultMode = Literal["timestamp", "hash"]
+
+
 class InputContainer(ABC):
     verifications: VerificationInput
     verification_time: datetime.datetime
     prev_result: VerifyCommandResult | None
+    prev_result_mode: PrevResultMode
     split_state: SplitState | None
 
     def __init__(
@@ -40,14 +46,45 @@ class InputContainer(ABC):
         verification_time: datetime.datetime,
         prev_result: VerifyCommandResult | None,
         split_state: SplitState | None,
+        prev_result_mode: PrevResultMode = "timestamp",
     ) -> None:
         self.verifications = verifications
         self.verification_time = verification_time
         self.prev_result = prev_result
+        self.prev_result_mode = prev_result_mode
         self.split_state = split_state
+        self._content_hashes: dict[pathlib.Path, str] = {}
 
     @abstractmethod
     def get_file_timestamp(self, path: pathlib.Path) -> datetime.datetime: ...
+
+    def file_content_hash(self, path: pathlib.Path) -> str | None:
+        """Digest of the file, its transitive dependencies and its verification settings.
+
+        ``None`` if any dependency is missing.
+        """
+        cached = self._content_hashes.get(path)
+        if cached is not None:
+            return cached
+        digest = hashlib.sha256()
+        f = self.verifications.files.get(path)
+        if f is None:
+            return None
+        for dep in sorted(self.verifications.transitive_depends_on[path]):
+            try:
+                content = dep.read_bytes()
+            except OSError:
+                return None
+            digest.update(dep.as_posix().encode())
+            digest.update(b"\0")
+            digest.update(content)
+            digest.update(b"\0")
+        for v in f.verification_list:
+            digest.update(v.model_dump_json(exclude_none=True).encode())
+            digest.update(b"\0")
+        result = digest.hexdigest()
+        self._content_hashes[path] = result
+        return result
 
     def file_need_verification(
         self,
@@ -56,12 +93,41 @@ class InputContainer(ABC):
     ) -> bool:
         if not path.exists():
             return False
-        base_time = min(self.verification_time, self.get_file_timestamp(path))
-        result = file_result.need_verification(base_time)
+        if self.prev_result_mode == "timestamp":
+            base_time = min(self.verification_time, self.get_file_timestamp(path))
+            result = file_result.need_verification(base_time)
+            if result:
+                logger.info("%s needs verification. base_time: %s", path, base_time)
+            else:
+                logger.info(
+                    "%s doesn't need verification. base_time: %s", path, base_time
+                )
+            return result
+        if self.prev_result_mode == "hash":
+            return self._file_need_verification_hash(path, file_result)
+        raise AssertionError(f"Unknown prev_result_mode: {self.prev_result_mode}")
+
+    def _file_need_verification_hash(
+        self,
+        path: pathlib.Path,
+        file_result: FileResult,
+    ) -> bool:
+        if file_result.content_hash is None:
+            # A result without a hash (from a version predating content-hash
+            # skipping) can't prove the verified content or commands match.
+            logger.info("%s needs verification. no content hash", path)
+            return True
+        if file_result.content_hash != self.file_content_hash(path):
+            logger.info("%s needs verification. content hash changed", path)
+            return True
+        # Unchanged content: only re-verify non-successful results.
+        result = not file_result.verifications or not file_result.is_success(
+            allow_skip=False
+        )
         if result:
-            logger.info("%s needs verification. base_time: %s", path, base_time)
+            logger.info("%s needs verification. previous failure", path)
         else:
-            logger.info("%s doesn't need verification. base_time: %s", path, base_time)
+            logger.info("%s doesn't need verification. content hash matches", path)
         return result
 
     @cached_property
@@ -135,12 +201,14 @@ class BaseVerifier(InputContainer):
         prev_result: VerifyCommandResult | None,
         split_state: SplitState | None,
         verification_time: datetime.datetime | None = None,
+        prev_result_mode: PrevResultMode = "timestamp",
     ) -> None:
         super().__init__(
             verifications=verifications,
             verification_time=verification_time or _now(),
             prev_result=prev_result,
             split_state=split_state,
+            prev_result_mode=prev_result_mode,
         )
         self._input = verifications
         self.timeout = timeout
@@ -260,7 +328,8 @@ class BaseVerifier(InputContainer):
                         f,
                         download=download,
                         deadline=deadline,
-                    )
+                    ),
+                    content_hash=self.file_content_hash(p),
                 )
 
         sippable_file_results = self.skippable_results()
@@ -309,6 +378,7 @@ class BaseVerifier(InputContainer):
                     )
                 results[p] = FileResult(
                     verifications=verifications,
+                    content_hash=self.file_content_hash(p),
                     newest=True,
                 )
         return results
@@ -345,6 +415,7 @@ class Verifier(BaseVerifier):
         prev_result: VerifyCommandResult | None,
         split_state: SplitState | None,
         verification_time: datetime.datetime | None = None,
+        prev_result_mode: PrevResultMode = "timestamp",
         use_git_timestamp: bool,
     ) -> None:
         super().__init__(
@@ -352,6 +423,7 @@ class Verifier(BaseVerifier):
             verification_time=verification_time or _now(),
             prev_result=prev_result,
             split_state=split_state,
+            prev_result_mode=prev_result_mode,
             timeout=timeout,
             default_tle=default_tle,
             default_mle=default_mle,

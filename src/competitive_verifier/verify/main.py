@@ -17,7 +17,7 @@ from competitive_verifier.arg import (
 from competitive_verifier.log import GitHubMessageParams
 from competitive_verifier.models import VerificationInput, VerifyCommandResult
 
-from .verifier import SplitState, Verifier
+from .verifier import PrevResultMode, SplitState, Verifier
 
 logger = getLogger(__name__)
 
@@ -37,6 +37,7 @@ class Verify(
     default_mle: float | None = None
 
     prev_result: pathlib.Path | None = None
+    prev_result_mode: PrevResultMode = "timestamp"
 
     download: bool = True
 
@@ -123,6 +124,15 @@ class Verify(
             required=False,
             help="Previous result json file",
         )
+        parser.add_argument(
+            "--prev-result-mode",
+            choices=("timestamp", "hash"),
+            default="timestamp",
+            help="How to decide whether a prev-result entry is still valid:"
+            " 'timestamp' (default) compares file modification times;"
+            " 'hash' compares a content hash of the file, its transitive"
+            " dependencies and its verification commands.",
+        )
 
         parser.add_argument(
             "--no-download",
@@ -164,6 +174,7 @@ class Verify(
             default_tle=self.default_tle,
             default_mle=self.default_mle,
             prev_result=prev_result,
+            prev_result_mode=self.prev_result_mode,
             split_state=self.split_state,
         )
         result = verifier.verify(download=self.download)
