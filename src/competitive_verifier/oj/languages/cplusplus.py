@@ -3,12 +3,13 @@ import pathlib
 import platform
 import shlex
 import shutil
+import subprocess
 from logging import getLogger
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr
 
-from competitive_verifier.exec import command_stdout
+from competitive_verifier.exec import command_stdout, exec_command
 from competitive_verifier.log import GitHubMessageParams
 
 from . import special_comments
@@ -111,6 +112,45 @@ def _cplusplus_list_defined_macros(
     return define
 
 
+def _search_dirs(*, CXX: pathlib.Path, CXXFLAGS: list[str]) -> list[str]:
+    """Include search directories reported by ``$CXX -E -v``."""
+    command = [str(CXX), *CXXFLAGS, "-E", "-x", "c++", "-v", os.devnull]
+    result = exec_command(command, text=True, capture_output=True)
+    dirs: list[str] = []
+    collecting = False
+    for line in result.stderr.splitlines():
+        if line in (
+            '#include "..." search starts here:',
+            "#include <...> search starts here:",
+        ):
+            collecting = True
+        elif line == "End of search list.":
+            break
+        elif collecting and line.startswith(" "):
+            dirs.append(line.removeprefix(" "))
+    return dirs
+
+
+def _cplusplus_list_include_directories(
+    *, CXX: pathlib.Path, CXXFLAGS: list[str]
+) -> list[pathlib.Path]:
+    """Include search directories that the configured flags add.
+
+    Asks the preprocessor for its search list with and without the flags and
+    takes the difference, so every directory option (``-I``, ``-iquote``,
+    ``-isystem``, ``-idirafter``, ...) is interpreted by the compiler itself.
+    """
+    try:
+        with_flags = _search_dirs(CXX=CXX, CXXFLAGS=CXXFLAGS)
+        default = set(_search_dirs(CXX=CXX, CXXFLAGS=[]))
+    except (OSError, subprocess.SubprocessError):
+        logger.warning("Failed to query include directories from %s", CXX)
+        return []
+    # The compiler echoes each directory as given; resolve them against the
+    # process cwd, like the paths returned by _cplusplus_list_depending_files.
+    return [pathlib.Path(d).resolve() for d in with_flags if d not in default]
+
+
 _NOT_SPECIAL_COMMENTS = "*NOT_SPECIAL_COMMENTS*"
 _PROBLEM = "PROBLEM"
 _IGNORE = "IGNORE"
@@ -122,6 +162,9 @@ _STANDALONE = "STANDALONE"
 
 class CPlusPlusLanguage(Language):
     config: OjVerifyCPlusPlusConfig = Field(default_factory=OjVerifyCPlusPlusConfig)
+    _include_directories_cache: dict[pathlib.Path, list[pathlib.Path]] = PrivateAttr(
+        default_factory=dict[pathlib.Path, list[pathlib.Path]]
+    )
 
     def _list_environments(self) -> list[CPlusPlusLanguageEnvironment]:
         default_CXXFLAGS = ["--std=c++17", "-O2", "-Wall", "-g"]  # noqa: N806
@@ -236,10 +279,20 @@ class CPlusPlusLanguage(Language):
             CXXFLAGS=[*env.cxx_flags, "-I", str(basedir)],
         )
 
+    def _include_directories(self, basedir: pathlib.Path) -> list[pathlib.Path]:
+        cached = self._include_directories_cache.get(basedir)
+        if cached is None:
+            env = self._list_environments()[0]
+            # Mirror the verification compile command, which appends -I basedir.
+            cached = _cplusplus_list_include_directories(
+                CXX=env.cxx,
+                CXXFLAGS=[*env.cxx_flags, "-I", str(basedir)],
+            ) or [basedir]
+            self._include_directories_cache[basedir] = cached
+        return cached
+
     def bundle(self, path: pathlib.Path, *, basedir: pathlib.Path) -> bytes | None:
-        include_paths: list[pathlib.Path] = [basedir]
-        assert isinstance(include_paths, list)
-        bundler = Bundler(iquotes=include_paths)
+        bundler = Bundler(iquotes=self._include_directories(basedir))
         bundler.update(path)
         return bundler.get()
 
