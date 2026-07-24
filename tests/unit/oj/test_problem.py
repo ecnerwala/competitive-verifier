@@ -1,6 +1,12 @@
+import pathlib
+import subprocess
+import textwrap
+
 import pytest
+from pytest_mock import MockerFixture
 
 from competitive_verifier.oj.problem import (
+    LibraryCheckerProblem,
     _normpath,  # pyright: ignore[reportPrivateUsage]
     problem_from_url,
 )
@@ -84,3 +90,67 @@ test_problem_repr_params = [
 )
 def test_problem_repr(url: str, expected: str):
     assert repr(problem_from_url(url)) == expected
+
+
+@pytest.fixture
+def library_checker_repo(
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> pathlib.Path:
+    monkeypatch.setenv("COMPETITIVE_VERIFY_CONFIG_PATH", str(tmp_path))
+    repo_path = tmp_path / "cache" / "library-checker-problems"
+    (repo_path / "sample" / "aplusb").mkdir(parents=True)
+    (repo_path / "sample" / "aplusb" / "info.toml").write_text("")
+    (repo_path / "generate.py").write_text(
+        textwrap.dedent(
+            """\
+            import pathlib
+
+
+            class Problem:
+                def __init__(self, rootdir: pathlib.Path, basedir: pathlib.Path):
+                    self.rootdir = rootdir
+                    self.basedir = basedir
+
+                def problem_version(self) -> str:
+                    return "version-of-" + self.basedir.name
+            """
+        )
+    )
+    return repo_path
+
+
+@pytest.mark.allow_mkdir
+def test_library_checker_testdata_hash(
+    library_checker_repo: pathlib.Path,
+    mocker: MockerFixture,
+):
+    update = mocker.patch.object(LibraryCheckerProblem, "update_cloned_repository")
+    problem = LibraryCheckerProblem(problem_id="aplusb")
+    assert problem.testdata_hash() == "version-of-aplusb"
+    update.assert_called_once_with()
+
+
+@pytest.mark.allow_mkdir
+def test_library_checker_testdata_hash_update_failure(
+    library_checker_repo: pathlib.Path,
+    mocker: MockerFixture,
+):
+    mocker.patch.object(
+        LibraryCheckerProblem,
+        "update_cloned_repository",
+        side_effect=subprocess.CalledProcessError(128, "git"),
+    )
+    problem = LibraryCheckerProblem(problem_id="aplusb")
+    assert problem.testdata_hash() is None
+
+
+@pytest.mark.allow_mkdir
+def test_library_checker_testdata_hash_script_failure(
+    library_checker_repo: pathlib.Path,
+    mocker: MockerFixture,
+):
+    mocker.patch.object(LibraryCheckerProblem, "update_cloned_repository")
+    (library_checker_repo / "generate.py").unlink()
+    problem = LibraryCheckerProblem(problem_id="aplusb")
+    assert problem.testdata_hash() is None

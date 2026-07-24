@@ -82,6 +82,10 @@ class InputContainer(ABC):
         for v in f.verification_list:
             digest.update(v.model_dump_json(exclude_none=True).encode())
             digest.update(b"\0")
+            testdata_hash = v.testdata_hash()
+            if testdata_hash is not None:
+                digest.update(testdata_hash.encode())
+            digest.update(b"\0")
         result = digest.hexdigest()
         self._content_hashes[path] = result
         return result
