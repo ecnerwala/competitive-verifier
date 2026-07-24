@@ -64,6 +64,21 @@ class _BaseProblem(Problem):
     def _download_cases(self) -> Iterable[TestCaseData]: ...
 
 
+# library-checker-problems' generate.py defines problem_version(): a digest of
+# everything the test cases are generated from (the problem directory, common/
+# and generate.py itself), computable without generating the test cases.
+_problem_version_script = """
+import pathlib
+import sys
+
+rootdir = pathlib.Path(sys.argv[1])
+sys.path.insert(0, str(rootdir))
+from generate import Problem
+
+print(Problem(rootdir, pathlib.Path(sys.argv[2])).problem_version())
+"""
+
+
 class LibraryCheckerProblem(Problem):
     checker_exe_name: ClassVar[str] = (
         "checker.exe" if sys.platform == "win32" else "checker"
@@ -147,6 +162,25 @@ class LibraryCheckerProblem(Problem):
             if m:
                 return cls(problem_id=m.group(1))
         return None
+
+    def testdata_hash(self) -> str | None:
+        try:
+            self.update_cloned_repository()
+            version = subprocess.check_output(
+                [
+                    sys.executable,
+                    "-c",
+                    _problem_version_script,
+                    str(self.repo_path),
+                    str(self.source_directory),
+                ],
+                stderr=sys.stderr,
+                text=True,
+            )
+        except (OSError, subprocess.SubprocessError, RuntimeError):
+            logger.warning("Failed to get the problem version of %s", self.url)
+            return None
+        return version.strip()
 
     _is_repository_updated: ClassVar[set[pathlib.Path]] = set()
 

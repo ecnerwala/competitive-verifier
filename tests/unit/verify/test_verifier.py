@@ -337,7 +337,7 @@ test_file_need_verification_params: list[
                     status=ResultStatus.SUCCESS,
                     last_execution_time=datetime.datetime(2016, 12, 24),
                 ),
-            ]
+            ],
         ),
         False,
     ),
@@ -358,7 +358,7 @@ test_file_need_verification_params: list[
                     status=ResultStatus.SUCCESS,
                     last_execution_time=datetime.datetime(2016, 12, 24),
                 ),
-            ]
+            ],
         ),
         True,
     ),
@@ -379,7 +379,7 @@ test_file_need_verification_params: list[
                     status=ResultStatus.FAILURE,
                     last_execution_time=datetime.datetime(2016, 12, 24),
                 ),
-            ]
+            ],
         ),
         True,
     ),
@@ -400,7 +400,7 @@ test_file_need_verification_params: list[
                     status=ResultStatus.SKIPPED,
                     last_execution_time=datetime.datetime(2016, 12, 24),
                 ),
-            ]
+            ],
         ),
         True,
     ),
