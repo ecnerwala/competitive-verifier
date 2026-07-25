@@ -20,6 +20,13 @@
         top: 0;
         right: 0;
     }
+
+    // Set synchronously by an inline script (JS-enabled clients only) and
+    // removed once the line-number gutter has been rendered, so the code
+    // doesn't flash without line numbers.
+    &.code-pending pre.hljs code {
+        visibility: hidden;
+    }
 }
 
 .hljs {
@@ -96,42 +103,111 @@ table.coverage-summary {
         color: #999;
     }
 
-    .coverage-percent {
-        display: inline-block;
-        min-width: 3.2em;
-        text-align: right;
-        font-variant-numeric: tabular-nums;
-        color: #333;
-    }
-
     .coverage-counts {
         font-variant-numeric: tabular-nums;
     }
+}
 
-    .coverage-bar {
-        display: inline-block;
-        vertical-align: baseline;
-        width: 10em;
-        height: 0.55em;
-        margin-left: 0.5em;
-        border-radius: 0.3em;
-        background-color: #eee;
-        overflow: hidden;
+.coverage-percent {
+    display: inline-block;
+    min-width: 3.2em;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    color: #333;
+}
+
+.coverage-bar {
+    display: inline-block;
+    vertical-align: baseline;
+    width: 10em;
+    height: 0.55em;
+    margin-left: 0.5em;
+    border-radius: 0.3em;
+    background-color: #eee;
+    overflow: hidden;
+}
+
+.coverage-bar-fill {
+    display: block;
+    height: 100%;
+    border-radius: 0.3em;
+    background-color: #7bc96f;
+
+    &.coverage-medium {
+        background-color: #e6c35c;
     }
 
-    .coverage-bar-fill {
-        display: block;
-        height: 100%;
-        border-radius: 0.3em;
-        background-color: #7bc96f;
+    &.coverage-low {
+        background-color: #e8a09a;
+    }
+}
 
-        &.coverage-medium {
-            background-color: #e6c35c;
-        }
+// Compact page-header metadata block (GitHub link, last update, include
+// directive, reference links).
+.page-meta {
+    margin: 0.3em 0 1.5em;
+    font-size: 0.9em;
+    color: #777;
 
-        &.coverage-low {
-            background-color: #e8a09a;
+    .page-meta-row {
+        margin: 0.15em 0;
+    }
+
+    .meta-sep {
+        margin: 0 0.35em;
+        color: #bbb;
+    }
+
+    #include-directive-anchor {
+        cursor: pointer;
+    }
+
+    ul.page-meta-links {
+        list-style: none;
+        padding-left: 1.5em;
+        margin: 0.1em 0;
+
+        li {
+            margin: 0.1em 0;
         }
+    }
+}
+
+// Table-like index listing: no bullets, one flex row per file with the
+// coverage indicator right-aligned in a shared column.
+ul.index-files {
+    list-style: none;
+    padding-left: 0;
+    margin: 0 0 1em;
+    max-width: 36em;
+
+    li {
+        display: flex;
+        align-items: baseline;
+        padding: 0.15em 0.5em;
+        border-radius: 3px;
+
+        &:hover {
+            background-color: #f6f8fa;
+        }
+    }
+}
+
+.index-coverage {
+    margin-left: auto;
+    padding-left: 1em;
+    font-size: 0.85em;
+    color: #777;
+    white-space: nowrap;
+
+    .coverage-percent {
+        min-width: 3em;
+        color: #777;
+    }
+
+    .coverage-bar {
+        width: 5em;
+        height: 0.5em;
     }
 }
 
