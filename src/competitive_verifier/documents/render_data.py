@@ -53,11 +53,20 @@ class RenderBaseModel(BaseModel):
     )
 
 
+class CoverageMetric(RenderBaseModel):
+    covered: int
+    excluded: int
+    total: int
+    rate: float
+
+
 class RenderLink(RenderBaseModel):
     path: ForcePosixPath
     filename: str
     icon: StatusIcon
     title: str | None = None
+    coverage: CoverageMetric | None = None
+    """Line coverage of the linked page."""
 
     @model_validator(mode="after")
     def validate_title(self: "RenderLink") -> "RenderLink":
@@ -85,13 +94,6 @@ class CoverageCount(RenderBaseModel):
     count: int
     branch_counts: list[int] = Field(default_factory=list[int])
     """Execution count of each branch on the line."""
-
-
-class CoverageMetric(RenderBaseModel):
-    covered: int
-    excluded: int
-    total: int
-    rate: float
 
 
 class PageCoverage(RenderBaseModel):

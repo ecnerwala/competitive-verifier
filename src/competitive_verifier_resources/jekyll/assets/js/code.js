@@ -94,6 +94,10 @@ for (const pre of document.querySelectorAll('.hljs')) {
     }
 }
 
+for (const el of document.querySelectorAll('.code-pending')) {
+    el.classList.remove('code-pending')
+}
+
 for (const btn of document.getElementsByClassName('code-copy-btn')) {
     btn.addEventListener('click', async function () {
         const code = this.closest('.code').querySelector('.hljs:not(.disable) code')
