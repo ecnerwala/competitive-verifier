@@ -1,5 +1,6 @@
 {%- if include.embedded.size >= 1 -%}
 <div class="code">
+<script>document.currentScript.parentElement.classList.add('code-pending')</script>
 {%- for source in include.embedded -%}
     {%- assign codeBody = source.code -%}
     <pre class="hljs {% unless forloop.first %}disable{% endunless %}" id="code-body-{{forloop.index}}"><code class="language-{{include.extension}}">{{ codeBody | xml_escape }}</code></pre>

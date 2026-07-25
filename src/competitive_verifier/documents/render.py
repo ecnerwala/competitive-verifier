@@ -500,6 +500,7 @@ class PageRenderJob(RenderJob):
             filename=self.source_path.relative_to(self.group_dir).as_posix(),
             title=self.front_matter.title,
             icon=self.stat.verification_status,
+            coverage=self.coverage.lines if self.coverage else None,
         )
 
     @cached_property
