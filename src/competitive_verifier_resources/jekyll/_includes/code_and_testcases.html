@@ -2,7 +2,38 @@
 
 {{ include.header }}
 
-{%- include code.html extension=include.data.pathExtension embedded=include.data.embedded -%}
+{%- if include.data.coverage -%}
+{%- assign coverage = include.data.coverage -%}
+<table class="coverage-summary">
+    <thead>
+        <tr><th></th><th>Coverage</th><th>Exec / Excl / Total</th></tr>
+    </thead>
+    <tbody>
+        {%- assign coverage_metrics = "" | split: "" -%}
+        {%- if coverage.lines %}{% assign coverage_metrics = coverage_metrics | push: "Lines" %}{% endif -%}
+        {%- if coverage.functions %}{% assign coverage_metrics = coverage_metrics | push: "Functions" %}{% endif -%}
+        {%- if coverage.branches %}{% assign coverage_metrics = coverage_metrics | push: "Branches" %}{% endif -%}
+        {%- for name in coverage_metrics -%}
+        {%- case name -%}
+            {%- when "Lines" %}{% assign m = coverage.lines -%}
+            {%- when "Functions" %}{% assign m = coverage.functions -%}
+            {%- when "Branches" %}{% assign m = coverage.branches -%}
+        {%- endcase -%}
+        {%- assign coverage_percent = m.rate | times: 100 -%}
+        <tr>
+            <th>{{ name }}</th>
+            <td>
+                <span class="coverage-percent">{{ coverage_percent | round: 1 }}%</span>
+                <span class="coverage-bar"><span class="coverage-bar-fill{% if coverage_percent < 50 %} coverage-low{% elsif coverage_percent < 80 %} coverage-medium{% endif %}" style="width: {{ coverage_percent | round: 1 }}%"></span></span>
+            </td>
+            <td class="coverage-counts">{{ m.covered }} / {{ m.excluded }} / {{ m.total }}</td>
+        </tr>
+        {%- endfor -%}
+    </tbody>
+</table>
+{%- endif -%}
+
+{%- include code.html extension=include.data.pathExtension embedded=include.data.embedded coverage=include.data.coverage -%}
 
 {%- if include.data.testcases and include.data.testcases.size != 0 -%}
 {% assign test_cases_tag = include.test_cases_tag | default: 'h2' %}

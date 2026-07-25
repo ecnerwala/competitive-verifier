@@ -11,6 +11,7 @@ from competitive_verifier.models import VerificationInput, VerifyCommandResult
 from .config import ConfigYaml, load_config_yml
 from .front_matter import Markdown
 from .render import RenderJob
+from .render_data import PageCoverage
 
 logger = getLogger(__name__)
 
@@ -22,6 +23,7 @@ class DocumentBuilder(BaseModel):
     destination_dir: pathlib.Path
     include: list[str] | None
     exclude: list[str] | None
+    coverage: dict[pathlib.Path, PageCoverage] | None = None
 
     def build(self) -> bool:
         logger.info("Working directory: %s", pathlib.Path.cwd().as_posix())
@@ -106,6 +108,7 @@ class DocumentBuilder(BaseModel):
             result=self.result,
             config=config_yml,
             index_md=index_md,
+            coverage=self.coverage,
         ):
             logger.debug(job)
             dst = self.destination_dir / job.destination_name

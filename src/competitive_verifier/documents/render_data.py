@@ -3,7 +3,7 @@ import enum
 from collections.abc import Sequence
 from typing import Annotated, Any
 
-from pydantic import BaseModel, ConfigDict, PlainSerializer, model_validator
+from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, model_validator
 from pydantic.alias_generators import to_camel
 
 from competitive_verifier.models import ForcePosixPath, SortedPathList, TestcaseResult
@@ -80,6 +80,29 @@ class EnvTestcaseResult(RenderBaseModel, TestcaseResult):
     environment: str | None
 
 
+class CoverageCount(RenderBaseModel):
+    line: int
+    count: int
+    branch_counts: list[int] = Field(default_factory=list[int])
+    """Execution count of each branch on the line."""
+
+
+class CoverageMetric(RenderBaseModel):
+    covered: int
+    excluded: int
+    total: int
+    rate: float
+
+
+class PageCoverage(RenderBaseModel):
+    lines: CoverageMetric
+    functions: CoverageMetric | None = None
+    branches: CoverageMetric | None = None
+    line_counts: list[CoverageCount]
+    """Execution count of each executable line."""
+    excluded_lines: list[int]
+
+
 class CategorizedIndex(RenderBaseModel):
     name: str
     pages: list[RenderLink]
@@ -102,6 +125,7 @@ class PageRenderData(RenderBaseModel):
     ]
     attributes: dict[str, Any]
     testcases: list[EnvTestcaseResult] | None = None
+    coverage: PageCoverage | None = None
 
     is_failed: bool
     is_verification_file: bool

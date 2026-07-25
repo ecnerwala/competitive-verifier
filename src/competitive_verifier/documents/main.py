@@ -20,6 +20,7 @@ from competitive_verifier.models import (
 )
 
 from .builder import DocumentBuilder
+from .code_coverage import load_coverage_json
 
 logger = getLogger(__name__)
 
@@ -46,6 +47,7 @@ class Docs(
     )
     docs: pathlib.Path | None = None
     destination: pathlib.Path
+    coverage_json: pathlib.Path | None = None
 
     @classmethod
     def add_parser(cls, parser: ArgumentParser):
@@ -61,6 +63,12 @@ class Docs(
             type=pathlib.Path,
             default=destination,
             help=f"Output directory for markdown document. default: {destination.as_posix()}",
+        )
+        parser.add_argument(
+            "--coverage-json",
+            type=pathlib.Path,
+            help="Code coverage report in gcovr JSON format."
+            " Adds coverage summaries and per-line highlighting to documents.",
         )
 
     def _run(self) -> bool:
@@ -80,6 +88,10 @@ class Docs(
         logger.debug("verifications=%s", verifications)
         logger.debug("result=%s", result)
 
+        coverage = (
+            load_coverage_json(self.coverage_json) if self.coverage_json else None
+        )
+
         return DocumentBuilder(
             verifications=verifications,
             result=result,
@@ -87,4 +99,5 @@ class Docs(
             destination_dir=self.destination,
             include=self.include,
             exclude=self.exclude,
+            coverage=coverage,
         ).build()
