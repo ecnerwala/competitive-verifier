@@ -41,6 +41,7 @@ from .render_data import (
     IndexFiles,
     IndexRenderData,
     MultiCodePageData,
+    PageCoverage,
     PageRenderData,
     RenderLink,
     StatusIcon,
@@ -323,6 +324,7 @@ class RenderJob(ABC):
         result: VerifyCommandResult,
         config: ConfigYaml,
         index_md: Markdown | None = None,
+        coverage: dict[pathlib.Path, "PageCoverage"] | None = None,
     ) -> list["RenderJob"]:
         def plain_content(source: pathlib.Path) -> RenderJob | None:
             if source.suffix == ".md":
@@ -389,6 +391,7 @@ class RenderJob(ABC):
                 verifications=verifications,
                 result=result,
                 page_jobs=page_jobs,
+                coverage=coverage.get(source) if coverage else None,
             )
 
             if pj.display == DocumentOutputMode.never:
@@ -460,6 +463,7 @@ class PageRenderJob(RenderJob):
     verifications: VerificationInput
     result: VerifyCommandResult
     page_jobs: dict[pathlib.Path, "PageRenderJob"]
+    coverage: "PageCoverage | None" = None
 
     @property
     def is_verification(self):
@@ -577,6 +581,7 @@ class PageRenderJob(RenderJob):
                 if self.stat.verification_results
                 else None
             ),
+            coverage=self.coverage,
             verification_status=self.stat.verification_status,
             is_verification_file=self.stat.is_verification,
             is_failed=self.stat.verification_status.is_failed,

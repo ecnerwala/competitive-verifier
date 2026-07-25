@@ -68,3 +68,135 @@
         background-color: #cce;
     }
 }
+
+table.coverage-summary {
+    width: auto;
+    margin: 0.5em 0 1em;
+    font-size: 0.9em;
+    border-collapse: collapse;
+
+    th, td {
+        padding: 0.15em 1.2em 0.15em 0;
+        border: none;
+        background: none;
+        text-align: left;
+        font-weight: normal;
+        color: #555;
+    }
+
+    tbody th {
+        font-weight: bold;
+        color: #333;
+    }
+
+    thead th {
+        font-size: 0.85em;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        color: #999;
+    }
+
+    .coverage-percent {
+        display: inline-block;
+        min-width: 3.2em;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+        color: #333;
+    }
+
+    .coverage-counts {
+        font-variant-numeric: tabular-nums;
+    }
+
+    .coverage-bar {
+        display: inline-block;
+        vertical-align: baseline;
+        width: 10em;
+        height: 0.55em;
+        margin-left: 0.5em;
+        border-radius: 0.3em;
+        background-color: #eee;
+        overflow: hidden;
+    }
+
+    .coverage-bar-fill {
+        display: block;
+        height: 100%;
+        border-radius: 0.3em;
+        background-color: #7bc96f;
+
+        &.coverage-medium {
+            background-color: #e6c35c;
+        }
+
+        &.coverage-low {
+            background-color: #e8a09a;
+        }
+    }
+}
+
+.code-line {
+    display: block;
+    width: 100%;
+
+    &::before {
+        content: attr(data-line-no);
+        display: inline-block;
+        white-space: pre;
+        margin-right: 1em;
+        color: #bbb;
+        user-select: none;
+    }
+
+    &.coverage-hit {
+        background-color: #edf7ed;
+    }
+
+    &.coverage-partial {
+        background-color: #fdf6e3;
+    }
+
+    &.coverage-miss {
+        background-color: #fbeceb;
+    }
+
+    &.coverage-excluded {
+        background-color: #f5f5f5;
+        opacity: 0.65;
+    }
+}
+
+.coverage-code .code-line::before {
+    content: attr(data-line-no) "  " attr(data-hit-count);
+}
+
+.coverage-code .code-line {
+    cursor: pointer;
+
+    &.coverage-hit::before {
+        color: #57ab5a;
+    }
+
+    &.coverage-partial::before {
+        color: #c69026;
+    }
+
+    &.coverage-miss::before {
+        color: #e5534b;
+    }
+
+    &.coverage-excluded::before {
+        color: #aaa;
+    }
+}
+
+.coverage-detail {
+    display: block;
+    white-space: pre;
+    padding: 0.3em 0.8em;
+    margin: 0.2em 0;
+    border-left: 3px solid #d0d7de;
+    background-color: #f6f8fa;
+    color: #57606a;
+    font-size: 0.92em;
+}
