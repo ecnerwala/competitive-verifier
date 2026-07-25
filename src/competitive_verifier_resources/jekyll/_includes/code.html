@@ -4,15 +4,22 @@
     {%- assign codeBody = source.code -%}
     <pre class="hljs {% unless forloop.first %}disable{% endunless %}" id="code-body-{{forloop.index}}"><code class="language-{{include.extension}}">{{ codeBody | xml_escape }}</code></pre>
 {%- endfor -%}
+{%- if include.coverage -%}
+    {%- assign codeBody = include.embedded.first.code -%}
+    <pre class="hljs disable" id="code-body-coverage" data-coverage-counts="{% for c in include.coverage.lineCounts %}{{ c.line }}:{{ c.count }}:{{ c.branchCounts | join: '|' }}{% unless forloop.last %},{% endunless %}{% endfor %}" data-coverage-excluded="{{ include.coverage.excludedLines | join: ',' }}"><code class="language-{{include.extension}}">{{ codeBody | xml_escape }}</code></pre>
+{%- endif -%}
     <div class="btn-area">
-    {%- if include.embedded.size >= 2 -%}
+    {%- if include.embedded.size >= 2 or include.coverage -%}
         <div class="btn-group">
         {%- for source in include.embedded -%}
-            <button type="button" class="code-btn code-toggle-btn {% if forloop.first %}selected{% endif %}" data-target="code-body-{{forloop.index}}">{{source.name}}</button>
+            <button type="button" class="code-btn code-toggle-btn {% if forloop.first %}selected{% endif %}" data-target="code-body-{{forloop.index}}">{%- if forloop.first -%}code{%- else -%}{{source.name}}{%- endif -%}</button>
+            {%- if forloop.first and include.coverage -%}
+            <button type="button" class="code-btn code-toggle-btn" data-target="code-body-coverage">coverage</button>
+            {%- endif -%}
         {%- endfor -%}
         </div>
     {%- endif -%}
-        <div class="btn-group"><button type="button" class="code-btn code-copy-btn hint--top hint--always hint--disable" aria-label="Copied!">Copy</button></div>
+        <div class="btn-group"><button type="button" class="code-btn code-copy-btn hint--top hint--always hint--disable" aria-label="Copied!">copy</button></div>
     </div>
 </div>
 {%- else -%}
