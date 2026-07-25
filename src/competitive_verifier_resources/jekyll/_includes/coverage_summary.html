@@ -1,0 +1,31 @@
+{%- assign coverage = include.coverage -%}
+<table class="coverage-summary">
+    <thead>
+        <tr><th></th><th>Coverage</th><th>Exec / Excl / Total</th></tr>
+    </thead>
+    <tbody>
+        {%- assign coverage_metrics = "" | split: "" -%}
+        {%- if coverage.lines %}{% assign coverage_metrics = coverage_metrics | push: "Lines" %}{% endif -%}
+        {%- if coverage.functions %}{% assign coverage_metrics = coverage_metrics | push: "Functions" %}{% endif -%}
+        {%- if coverage.branches %}{% assign coverage_metrics = coverage_metrics | push: "Branches" %}{% endif -%}
+        {%- for name in coverage_metrics -%}
+        {%- case name -%}
+            {%- when "Lines" %}{% assign m = coverage.lines -%}
+            {%- when "Functions" %}{% assign m = coverage.functions -%}
+            {%- when "Branches" %}{% assign m = coverage.branches -%}
+        {%- endcase -%}
+        {%- assign coverage_percent = m.rate | times: 100 -%}
+        <tr>
+            <th>{{ name }}</th>
+            <td>
+                <span class="coverage-percent">{{ coverage_percent | round: 1 }}%</span>
+                <span class="coverage-bar"><span class="coverage-bar-fill{% if coverage_percent < 50 %} coverage-low{% elsif coverage_percent < 80 %} coverage-medium{% endif %}" style="width: {{ coverage_percent | round: 1 }}%"></span></span>
+            </td>
+            <td class="coverage-counts">{{ m.covered }} / {{ m.excluded }} / {{ m.total }}</td>
+        </tr>
+        {%- endfor -%}
+        {%- if include.report_href %}
+        <tr><th class="coverage-report-link-row"><a class="coverage-report-link" href="{{ include.report_href }}">Full report</a></th><td></td><td></td></tr>
+        {%- endif -%}
+    </tbody>
+</table>

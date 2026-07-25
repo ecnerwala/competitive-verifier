@@ -78,7 +78,7 @@
 
 table.coverage-summary {
     width: auto;
-    margin: 0.5em 0 1em;
+    margin: 0.5em 0 1.5em;
     font-size: 0.9em;
     border-collapse: collapse;
 
@@ -103,8 +103,15 @@ table.coverage-summary {
         color: #999;
     }
 
-    .coverage-counts {
+    .coverage-counts,
+    thead th:last-child {
         font-variant-numeric: tabular-nums;
+        text-align: right;
+    }
+
+    th.coverage-report-link-row {
+        font-weight: normal;
+        font-size: 0.9em;
     }
 }
 
@@ -189,6 +196,10 @@ ul.index-files {
 
         &:hover {
             background-color: #f6f8fa;
+        }
+
+        &.index-unittest {
+            padding-left: 1.5em;
         }
     }
 }
