@@ -36,6 +36,7 @@ def jekyll_files() -> dict[str, bytes]:
             "_includes/mathjax/mathjax3.html",
             "_includes/code.html",
             "_includes/code_and_testcases.html",
+            "_includes/coverage_summary.html",
             "_includes/highlight_additional.html",
             "_includes/highlight/highlight_header.html",
             "_includes/dependencies.html",

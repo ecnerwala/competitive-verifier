@@ -1,3 +1,7 @@
+{%- if page.data.coverage -%}
+<h2>Coverage</h2>
+{%- include coverage_summary.html coverage=page.data.coverage -%}
+{%- endif -%}
 {%- for top in page.data.top -%}
 <h2>{{ top.type }}</h2>
 {%- for category in top.categories -%}

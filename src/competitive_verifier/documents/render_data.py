@@ -153,5 +153,13 @@ class MultiCodePageData(RenderBaseModel):
     dependencies: list[Dependency]
 
 
+class CoverageSummary(RenderBaseModel):
+    lines: CoverageMetric
+    functions: CoverageMetric | None = None
+    branches: CoverageMetric | None = None
+
+
 class IndexRenderData(RenderBaseModel):
     top: list[IndexFiles]
+    coverage: CoverageSummary | None = None
+    """Aggregate coverage over all pages with coverage data."""
