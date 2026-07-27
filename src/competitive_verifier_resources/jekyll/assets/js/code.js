@@ -1,6 +1,10 @@
 document.getElementsByClassName('hljs')
 
+// Copy buttons use the verbatim source text, captured before highlighting
+// and line-splitting rewrite the DOM.
+const rawText = new Map()
 for (const code of document.querySelectorAll('.hljs code')) {
+    rawText.set(code, code.textContent)
     hljs.highlightElement(code)
 }
 
@@ -106,8 +110,7 @@ for (const btn of document.getElementsByClassName('code-copy-btn')) {
         const code = target
             ? document.getElementById(target).querySelector('code')
             : this.closest('.code').querySelector('.hljs:not(.disable) code')
-        for (const d of code.querySelectorAll('.coverage-detail')) d.remove()
-        navigator.clipboard.writeText(code.innerText)
+        navigator.clipboard.writeText(rawText.get(code) ?? code.innerText)
 
         this.classList.remove("hint--disable")
         await new Promise(r => setTimeout(r, 700))
