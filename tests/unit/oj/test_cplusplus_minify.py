@@ -63,11 +63,11 @@ def test_keeps_source_markers_at_file_transitions():
     )
     assert out == textwrap.dedent(
         """\
-        #line 1 "src/a.hpp"
+        // src/a.hpp
         int a;int a2;
-        #line 1 "src/b.hpp"
+        // src/b.hpp
         int b;
-        #line 10 "src/a.hpp"
+        // src/a.hpp
         int a3;
         """
     )
@@ -190,3 +190,64 @@ _GNARLY = textwrap.dedent(
 def test_token_stream_is_preserved():
     minified = minify(_GNARLY, compiler="g++")
     assert raw_token_stream(_GNARLY) == raw_token_stream(minified)
+
+
+def test_light_keeps_line_structure_and_markers():
+    code = textwrap.dedent(
+        """\
+        #line 1 "src/a.hpp"
+        int a = 1;  // trailing comment
+
+        /* a
+           very
+           long
+           comment
+           block
+           spanning
+           many
+           lines
+           padding
+           padding
+           padding
+           padding
+           padding
+           padding
+           padding
+           padding
+           padding
+           padding
+           padding
+           padding
+           padding
+           padding
+           padding
+           padding
+           padding
+           padding
+           padding
+           padding
+           padding
+           padding
+           padding
+           padding
+           padding */
+        int b = 2;
+        int c = 3;
+        """
+    ).encode()
+    out = minify(code, compiler="g++", level="light").decode()
+    assert out == textwrap.dedent(
+        """\
+        #line 1 "src/a.hpp"
+        int a = 1;
+        #line 36 "src/a.hpp"
+        int b = 2;
+        int c = 3;
+        """
+    )
+
+
+def test_light_keeps_short_blank_runs():
+    code = b'#line 1 "src/a.hpp"\nint a = 1;\n\nint b = 2;\n'
+    out = minify(code, compiler="g++", level="light")
+    assert out == b'#line 1 "src/a.hpp"\nint a = 1;\n\nint b = 2;\n'

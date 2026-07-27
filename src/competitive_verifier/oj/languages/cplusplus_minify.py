@@ -19,6 +19,7 @@ import os
 import pathlib
 import re
 import tempfile
+from typing import Literal
 
 from competitive_verifier.exec import command_stdout, exec_command
 
@@ -173,13 +174,84 @@ def _collapse_whitespace(
     return bytes(out), None
 
 
+def _minify_light(uncommented: bytes) -> bytes:
+    """Drop comments' leftovers and trailing whitespace, keeping structure.
+
+    ``#line`` markers stay exact: blank lines (including lines emptied by
+    comment stripping) are kept as 1-byte placeholders so numbering is
+    preserved for free, and a blank run is collapsed to a resync ``#line``
+    directive only when the run is longer than the directive itself.
+    """
+    out: list[bytes] = []
+    current_file: bytes | None = None
+    lineno = 0
+    blanks = 0
+    in_raw_string: bytes | None = None
+
+    def flush_blanks() -> None:
+        nonlocal blanks
+        if not blanks:
+            return
+        marker = (
+            b"#line %d %s" % (lineno, current_file)
+            if current_file is not None
+            else None
+        )
+        if marker is not None and blanks > len(marker) + 1:
+            out.append(marker)
+        else:
+            out.extend([b""] * blanks)
+        blanks = 0
+
+    for raw_line in uncommented.split(b"\n"):
+        if in_raw_string is not None:
+            # Inside a multi-line raw string literal: preserve verbatim.
+            _, in_raw_string = _collapse_whitespace(
+                raw_line, in_raw_string=in_raw_string, squeeze=False
+            )
+            out.append(raw_line)
+            lineno += 1
+            continue
+        m = _LINE_DIRECTIVE_RE.match(raw_line)
+        if m:
+            blanks = 0
+            current_file = m.group(2)
+            lineno = int(m.group(1))
+            out.append(b"#line %d %s" % (lineno, current_file))
+            continue
+        stripped, in_raw_string = _collapse_whitespace(
+            raw_line, in_raw_string=None, squeeze=False
+        )
+        if not stripped.strip() and in_raw_string is None:
+            blanks += 1
+            lineno += 1
+            continue
+        flush_blanks()
+        out.append(raw_line.rstrip())
+        lineno += 1
+    # Trailing blank lines can simply be dropped.
+    return b"\n".join(out) + b"\n" if out else b""
+
+
 def minify(
     code: bytes,
     *,
     compiler: str = os.environ.get("CXX", "g++"),
     width: int = DEFAULT_WIDTH,
+    level: Literal["light", "full"] = "full",
 ) -> bytes:
+    """Minify C++ code.
+
+    ``level="full"`` strips comments, collapses whitespace, and packs
+    statements onto shared lines; ``#line`` markers become ``//`` comments
+    (packing makes their numbering wrong, and on a judge the named files
+    do not exist anyway) and warning-ignore pragmas wrap the output.
+    ``level="light"`` only strips comments, blank lines, and trailing
+    whitespace, preserving line structure and exact ``#line`` markers.
+    """
     uncommented = _uncomment(code, compiler=compiler)
+    if level == "light":
+        return _minify_light(uncommented)
 
     out: list[bytes] = []
     packed = bytearray()
@@ -221,7 +293,7 @@ def minify(
             path = m.group(2)
             if path != current_file:
                 current_file = path
-                pending_marker = b"#line " + m.group(1) + b" " + path
+                pending_marker = b"// " + path.strip(b'"')
             continue
 
         # Directives keep single spaces: in `#define FOO (x)` the space
