@@ -43,6 +43,9 @@ class Language(BaseModel):
     def bundle(self, path: pathlib.Path, *, basedir: pathlib.Path) -> bytes | None:
         return None
 
+    def minify_bundled(self, bundled_code: bytes) -> bytes | None:
+        return None
+
     @abc.abstractmethod
     def list_environments(
         self, path: pathlib.Path, *, basedir: pathlib.Path

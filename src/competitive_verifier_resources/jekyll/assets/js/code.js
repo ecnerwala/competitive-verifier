@@ -100,7 +100,12 @@ for (const el of document.querySelectorAll('.code-pending')) {
 
 for (const btn of document.getElementsByClassName('code-copy-btn')) {
     btn.addEventListener('click', async function () {
-        const code = this.closest('.code').querySelector('.hljs:not(.disable) code')
+        // With a data-target, copy that specific view (e.g. "copy bundled");
+        // otherwise copy whichever view is currently shown.
+        const target = this.dataset.target
+        const code = target
+            ? document.getElementById(target).querySelector('code')
+            : this.closest('.code').querySelector('.hljs:not(.disable) code')
         for (const d of code.querySelectorAll('.coverage-detail')) d.remove()
         navigator.clipboard.writeText(code.innerText)
 
