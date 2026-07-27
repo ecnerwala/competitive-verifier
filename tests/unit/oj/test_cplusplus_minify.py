@@ -265,6 +265,24 @@ def test_light_collapses_marker_runs():
     assert out == b'#line 12 "src/c.hpp"\nint c = 1;\n'
 
 
+def test_medium_squeezes_but_keeps_lines():
+    code = textwrap.dedent(
+        """\
+        #line 1 "src/a.hpp"
+        \tint a = f(x + 1);  // comment
+        \tbool r = x < y && y > z;
+        #define FOO (x)
+        """
+    ).encode()
+    out = minify(code, compiler="g++", level="medium").decode()
+    assert out.startswith(_PROLOGUE)
+    assert out.endswith(_EPILOGUE)
+    body = out[len(_PROLOGUE) : -len(_EPILOGUE)]
+    assert body == (
+        '#line 1 "src/a.hpp"\nint a=f(x+1);\nbool r=x<y&&y>z;\n#define FOO (x)\n'
+    )
+
+
 def test_light_keeps_short_blank_runs():
     code = b'#line 1 "src/a.hpp"\nint a = 1;\n\nint b = 2;\n'
     out = minify(code, compiler="g++", level="light")
