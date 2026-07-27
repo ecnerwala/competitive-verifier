@@ -295,6 +295,15 @@ class OjResolver:
                         additonal_sources.append(
                             AddtionalSource(name="bundled", path=dest_path)
                         )
+                        minified_code = language.minify_bundled(bundled_code)
+                        if minified_code:
+                            dest_path = _write_bundled(
+                                minified_code,
+                                path=path.with_name(path.stem + ".min" + path.suffix),
+                            )
+                            additonal_sources.append(
+                                AddtionalSource(name="minified", path=dest_path)
+                            )
                 except Exception:  # noqa: BLE001
                     dest_path = _write_bundled(
                         traceback.format_exc().encode(), path=path
