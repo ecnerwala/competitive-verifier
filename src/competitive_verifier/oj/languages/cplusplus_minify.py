@@ -186,21 +186,28 @@ def _minify_light(uncommented: bytes) -> bytes:
     current_file: bytes | None = None
     lineno = 0
     blanks = 0
+    need_marker = False
     in_raw_string: bytes | None = None
 
-    def flush_blanks() -> None:
-        nonlocal blanks
-        if not blanks:
-            return
-        marker = (
-            b"#line %d %s" % (lineno, current_file)
-            if current_file is not None
-            else None
-        )
-        if marker is not None and blanks > len(marker) + 1:
-            out.append(marker)
-        else:
-            out.extend([b""] * blanks)
+    def flush_gap() -> None:
+        # A pending marker subsumes any blank lines before it; a bare blank
+        # run is kept as 1-byte placeholders unless a resync directive is
+        # shorter.
+        nonlocal blanks, need_marker
+        if need_marker:
+            assert current_file is not None
+            out.append(b"#line %d %s" % (lineno, current_file))
+            need_marker = False
+        elif blanks:
+            marker = (
+                b"#line %d %s" % (lineno, current_file)
+                if current_file is not None
+                else None
+            )
+            if marker is not None and blanks > len(marker) + 1:
+                out.append(marker)
+            else:
+                out.extend([b""] * blanks)
         blanks = 0
 
     for raw_line in uncommented.split(b"\n"):
@@ -214,10 +221,9 @@ def _minify_light(uncommented: bytes) -> bytes:
             continue
         m = _LINE_DIRECTIVE_RE.match(raw_line)
         if m:
-            blanks = 0
             current_file = m.group(2)
             lineno = int(m.group(1))
-            out.append(b"#line %d %s" % (lineno, current_file))
+            need_marker = True
             continue
         stripped, in_raw_string = _collapse_whitespace(
             raw_line, in_raw_string=None, squeeze=False
@@ -226,7 +232,7 @@ def _minify_light(uncommented: bytes) -> bytes:
             blanks += 1
             lineno += 1
             continue
-        flush_blanks()
+        flush_gap()
         out.append(raw_line.rstrip())
         lineno += 1
     # Trailing blank lines can simply be dropped.
