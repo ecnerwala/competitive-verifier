@@ -223,4 +223,18 @@ def minify(
             flush_packed()
 
     flush_packed()
-    return b"\n".join(out) + b"\n" if out else b""
+    if not out:
+        return b""
+    # Packing many statements per line makes indentation meaningless, so
+    # silence the warnings that key off it (push/pop so nothing appended
+    # after the minified region is affected). -Wpragmas (GCC) and
+    # -Wunknown-warning-option (clang) keep each compiler quiet about the
+    # other's warning names.
+    prologue = [
+        b"#pragma GCC diagnostic push",
+        b'#pragma GCC diagnostic ignored "-Wpragmas"',
+        b'#pragma GCC diagnostic ignored "-Wunknown-warning-option"',
+        b'#pragma GCC diagnostic ignored "-Wmisleading-indentation"',
+        b'#pragma GCC diagnostic ignored "-Wmultistatement-macros"',
+    ]
+    return b"\n".join(prologue + out + [b"#pragma GCC diagnostic pop"]) + b"\n"

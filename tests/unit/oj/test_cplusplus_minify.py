@@ -14,8 +14,21 @@ _has_gcc = shutil.which("g++") is not None and _check_compiler("g++") == "gcc"
 pytestmark = pytest.mark.skipif(not _has_gcc, reason="g++ (GNU) is not installed")
 
 
+_PROLOGUE = (
+    "#pragma GCC diagnostic push\n"
+    '#pragma GCC diagnostic ignored "-Wpragmas"\n'
+    '#pragma GCC diagnostic ignored "-Wunknown-warning-option"\n'
+    '#pragma GCC diagnostic ignored "-Wmisleading-indentation"\n'
+    '#pragma GCC diagnostic ignored "-Wmultistatement-macros"\n'
+)
+_EPILOGUE = "#pragma GCC diagnostic pop\n"
+
+
 def _minify_str(code: str) -> str:
-    return minify(textwrap.dedent(code).encode(), compiler="g++").decode()
+    out = minify(textwrap.dedent(code).encode(), compiler="g++").decode()
+    assert out.startswith(_PROLOGUE)
+    assert out.endswith(_EPILOGUE)
+    return out[len(_PROLOGUE) : -len(_EPILOGUE)]
 
 
 def test_strips_comments_and_packs_lines():
@@ -129,3 +142,10 @@ def test_width_limit():
     assert len(lines) > 1
     assert all(len(line) <= 120 for line in lines)
     assert re.sub(r"\s+", "", out) == re.sub(r"\s+", "", code)
+
+
+def test_warning_pragmas_wrap_output():
+    out = minify(b"int x = 1;\n", compiler="g++").decode()
+    assert out.startswith(_PROLOGUE)
+    assert out.endswith(_EPILOGUE)
+    assert minify(b"", compiler="g++") == b""
