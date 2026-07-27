@@ -20,11 +20,13 @@ import pathlib
 import re
 import tempfile
 
-from competitive_verifier.exec import command_stdout
+from competitive_verifier.exec import command_stdout, exec_command
 
 DEFAULT_WIDTH = 120
 
 _LINEMARKER_RE = re.compile(rb'# (\d+) ".*"')
+_DEFINE_UNDEF_RE = re.compile(rb"#\s*(define|undef)\s+(\w+)")
+_MASKED_LINE_RE = re.compile(rb"#pragma cv_bundle_line (\d+)")
 _LINE_DIRECTIVE_RE = re.compile(rb'\s*#\s*line\s+(\d+)\s+(".*")\s*')
 _RAW_STRING_START_RE = re.compile(rb'(?:u8|[uUL])?R"([^ ()\\\t\v\f\n"]*)\(')
 
@@ -36,9 +38,21 @@ def _uncomment(code: bytes, *, compiler: str) -> bytes:
     linemarkers in the output all refer to the input file and are used to
     restore the original line numbering.
     """
+    # #line directives in the input would make the compiler's linemarkers
+    # refer to the named files instead of the input's own line numbers;
+    # hide them behind a pass-through pragma and restore them afterwards.
+    orig_lines = code.splitlines()
+    hidden: list[bytes] = []
+    masked_lines: list[bytes] = []
+    for line in orig_lines:
+        if _LINE_DIRECTIVE_RE.fullmatch(line):
+            masked_lines.append(b"#pragma cv_bundle_line %d" % len(hidden))
+            hidden.append(line)
+        else:
+            masked_lines.append(line)
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpfile = pathlib.Path(tmpdir) / "bundled.cpp"
-        tmpfile.write_bytes(code)
+        tmpfile.write_bytes(b"\n".join(masked_lines) + b"\n")
         out = command_stdout(
             [compiler, "-x", "c++", "-fpreprocessed", "-dD", "-E", str(tmpfile)],
             text=False,
@@ -47,10 +61,28 @@ def _uncomment(code: bytes, *, compiler: str) -> bytes:
     for line in out.splitlines():
         m = _LINEMARKER_RE.match(line.rstrip())
         if m:
-            while len(lines) + 1 < int(m.group(1)):
+            # Sync to the marker: pad when lines were dropped, truncate when
+            # the compiler injected lines that are not part of the input
+            # (e.g. -dD dumps the macro state changed by #pragma GCC target).
+            n = int(m.group(1))
+            while len(lines) + 1 < n:
                 lines.append(b"")
-        else:
-            lines.append(line)
+            del lines[n - 1 :]
+            continue
+        mm = _DEFINE_UNDEF_RE.match(line)
+        if mm:
+            # -dD emits #define/#undef lines of its own (e.g. the macro
+            # state changed by #pragma GCC target); keep the line only if
+            # the input has the same directive at (or right after, since
+            # the injected lines skew the count) this position.
+            idx = len(lines)
+            window = b"\n".join(orig_lines[idx : idx + 2])
+            if not re.search(
+                rb"#\s*%s\s+%s\b" % (mm.group(1), re.escape(mm.group(2))), window
+            ):
+                continue
+        m = _MASKED_LINE_RE.fullmatch(line.rstrip())
+        lines.append(hidden[int(m.group(1))] if m else line)
     return b"\n".join(lines) + b"\n"
 
 
@@ -238,3 +270,54 @@ def minify(
         b'#pragma GCC diagnostic ignored "-Wmultistatement-macros"',
     ]
     return b"\n".join(prologue + out + [b"#pragma GCC diagnostic pop"]) + b"\n"
+
+
+_RAW_TOKEN_RE = re.compile(
+    rb"^(\w+) '(.*?)'(?:\t| )*(?:\[\w+\][ \t]*)*Loc=<(.*?):(\d+):\d+(?:.*?)>$",
+    re.DOTALL | re.MULTILINE,
+)
+
+
+def raw_token_stream(
+    code: bytes, *, clang: str = "clang++"
+) -> list[tuple[bytes, bytes]]:
+    """Lex ``code`` with clang's raw lexer into (kind, spelling) tokens.
+
+    Whitespace and comments are dropped, as are ``#line`` directives and
+    the ``#pragma GCC diagnostic`` lines added by :func:`minify`, so the
+    stream of a file and of its minified form should be identical.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpfile = pathlib.Path(tmpdir) / "code.cpp"
+        tmpfile.write_bytes(code)
+        # clang prints the token dump to stderr.
+        result = exec_command(
+            [
+                clang,
+                "-x",
+                "c++",
+                "-fsyntax-only",
+                "-Xclang",
+                "-dump-raw-tokens",
+                str(tmpfile),
+            ],
+            text=False,
+            capture_output=True,
+        )
+        out = result.stderr
+    # Group by source line so directive lines can be dropped whole.
+    by_line: dict[int, list[tuple[bytes, bytes]]] = {}
+    for m in _RAW_TOKEN_RE.finditer(out):
+        kind, spelling, lineno = m.group(1), m.group(2), int(m.group(4))
+        if kind in (b"unknown", b"comment", b"eof"):
+            continue
+        by_line.setdefault(lineno, []).append((kind, spelling))
+    tokens: list[tuple[bytes, bytes]] = []
+    for _, line_tokens in sorted(by_line.items()):
+        spellings = [s for _, s in line_tokens]
+        if spellings[:2] == [b"#", b"line"]:
+            continue
+        if spellings[:4] == [b"#", b"pragma", b"GCC", b"diagnostic"]:
+            continue
+        tokens.extend(line_tokens)
+    return tokens

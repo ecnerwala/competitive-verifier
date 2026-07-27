@@ -214,15 +214,31 @@ def get_uncommented_code(
     code = _get_uncommented_code(
         path.resolve(), iquotes_options=tuple(iquotes_options), compiler=compiler
     )
+    orig_lines = path.read_bytes().splitlines()
     lines: list[bytes] = []
     for line in code.splitlines(keepends=True):
         m = re.match(rb'# (\d+) ".*"', line.rstrip())
         if m:
+            # Sync to the marker: pad when lines were dropped, truncate when
+            # the compiler injected lines that are not part of the input
+            # (e.g. -dD dumps the macro state changed by #pragma GCC target).
             lineno = int(m.group(1))
             while len(lines) + 1 < lineno:
                 lines.append(b"\n")
-        else:
-            lines.append(line)
+            del lines[lineno - 1 :]
+            continue
+        mm = re.match(rb"#\s*(define|undef)\s+(\w+)", line)
+        if mm:
+            # Keep -dD's #define/#undef lines only if the input has the
+            # same directive at (or right after, since the injected lines
+            # skew the count) this position.
+            idx = len(lines)
+            window = b"\n".join(orig_lines[idx : idx + 2])
+            if not re.search(
+                rb"#\s*%s\s+%s\b" % (mm.group(1), re.escape(mm.group(2))), window
+            ):
+                continue
+        lines.append(line)
     return b"".join(lines)
 
 

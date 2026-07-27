@@ -7,7 +7,10 @@ import pytest
 from competitive_verifier.oj.languages.cplusplus_bundle import (
     _check_compiler,  # pyright: ignore[reportPrivateUsage]
 )
-from competitive_verifier.oj.languages.cplusplus_minify import minify
+from competitive_verifier.oj.languages.cplusplus_minify import (
+    minify,
+    raw_token_stream,
+)
 
 _has_gcc = shutil.which("g++") is not None and _check_compiler("g++") == "gcc"
 
@@ -149,3 +152,41 @@ def test_warning_pragmas_wrap_output():
     assert out.startswith(_PROLOGUE)
     assert out.endswith(_EPILOGUE)
     assert minify(b"", compiler="g++") == b""
+
+
+def test_target_pragma_macro_dump_is_dropped():
+    # -dD dumps the macro state changed by #pragma GCC target; none of it
+    # may leak into the output, while user directives survive.
+    out = _minify_str(
+        """\
+        #pragma GCC target("avx2")
+        #define FOO 1
+        int x = FOO;
+        #undef FOO
+        """
+    )
+    assert "__AVX" not in out
+    assert "__code_model_small__" not in out
+    assert "#define FOO 1" in out
+    assert "#undef FOO" in out
+
+
+_GNARLY = textwrap.dedent(
+    """\
+    #line 1 "src/a.hpp"
+    #pragma GCC target("avx2")
+    #define MAX(a, b) ((a) > (b) ? (a) : (b))
+    template <typename T> T f(T a, T b) { return a + +b; /* c */ }
+    #line 1 "src/b.hpp"
+    const char* s = u8"a" "b";  // string juxtaposition
+    const char* r = R"x(raw
+      string)x";
+    bool g(int x, int y) { return x < y && y > x; }
+    """
+).encode()
+
+
+@pytest.mark.skipif(shutil.which("clang++") is None, reason="clang++ not installed")
+def test_token_stream_is_preserved():
+    minified = minify(_GNARLY, compiler="g++")
+    assert raw_token_stream(_GNARLY) == raw_token_stream(minified)
