@@ -79,7 +79,7 @@ def test_keeps_source_markers_at_file_transitions():
 def test_directives_keep_their_own_lines():
     out = _minify_str(
         """\
-        #include <vector>
+        #include <cassert>
         #define FOO(a) \\
             ((a) + 1)
         int x = FOO(1);
@@ -88,11 +88,34 @@ def test_directives_keep_their_own_lines():
     )
     assert out == textwrap.dedent(
         """\
-        #include <vector>
+        #include <cassert>
         #define FOO(a) \\
         ((a)+1)
         int x=FOO(1);int y=FOO(2);
         """
+    )
+
+
+def test_stdcxx_subsumed_includes_are_dropped():
+    code = textwrap.dedent(
+        """\
+        #include <bits/stdc++.h>
+        #include <vector>
+        #include <cassert>
+        #include <ext/pb_ds/assoc_container.hpp>
+        int x = 1;
+        """
+    )
+    packed = _minify_str(code)
+    assert packed == (
+        "#include <cassert>\n#include <ext/pb_ds/assoc_container.hpp>\nint x=1;\n"
+    )
+    light = minify(code.encode(), compiler="g++", level="light").decode()
+    assert (
+        light
+        == _NOFORMAT_ON
+        + "#include <cassert>\n#include <ext/pb_ds/assoc_container.hpp>\nint x = 1;\n"
+        + _NOFORMAT_OFF
     )
 
 

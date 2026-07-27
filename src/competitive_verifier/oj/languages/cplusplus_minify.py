@@ -22,6 +22,12 @@ import tempfile
 from typing import Literal
 
 from competitive_verifier.exec import command_stdout, exec_command
+from competitive_verifier.oj.languages.cplusplus_bundle import (
+    BITS_STDCXX_H,
+    C_STANDARD_LIBS,
+    CXX_C_ORIGIN_LIBS,
+    CXX_STANDARD_LIBS,
+)
 
 DEFAULT_WIDTH = 120
 
@@ -30,6 +36,20 @@ _DEFINE_UNDEF_RE = re.compile(rb"#\s*(define|undef)\s+(\w+)")
 _MASKED_LINE_RE = re.compile(rb"#pragma cv_bundle_line (\d+)")
 _LINE_DIRECTIVE_RE = re.compile(rb'\s*#\s*line\s+(\d+)\s+(".*")\s*')
 _RAW_STRING_START_RE = re.compile(rb'(?:u8|[uUL])?R"([^ ()\\\t\v\f\n"]*)\(')
+_SYSTEM_INCLUDE_RE = re.compile(rb"\s*#\s*include\s*<([^>]+)>\s*")
+
+# A submission template is assumed to start with #include <bits/stdc++.h>,
+# so includes it subsumes are dropped from minified output. <cassert> is
+# NOT subsumed: recent libstdc++ no longer pulls it into <bits/stdc++.h>.
+STDCXX_SUBSUMED_INCLUDES = frozenset(
+    (CXX_STANDARD_LIBS | C_STANDARD_LIBS | CXX_C_ORIGIN_LIBS | {BITS_STDCXX_H})
+    - {"cassert", "assert.h"}
+)
+
+
+def _is_subsumed_include(line: bytes) -> bool:
+    m = _SYSTEM_INCLUDE_RE.fullmatch(line)
+    return m is not None and m.group(1).decode() in STDCXX_SUBSUMED_INCLUDES
 
 
 def _uncomment(code: bytes, *, compiler: str) -> bytes:
@@ -244,7 +264,9 @@ def _minify_lines(uncommented: bytes, *, squeeze: bool, line_markers: bool) -> b
         line, in_raw_string = _collapse_whitespace(
             raw_line, in_raw_string=None, squeeze=squeeze and not is_directive
         )
-        if not line.strip() and in_raw_string is None:
+        if (
+            not line.strip() and in_raw_string is None
+        ) or _is_subsumed_include(line):
             blanks += 1
             lineno += 1
             continue
@@ -270,6 +292,10 @@ def minify(
     output. ``level="medium"`` compresses whitespace the same way but
     keeps one statement per line; ``level="light"`` only strips comments,
     blank lines, and trailing whitespace.
+
+    System includes subsumed by ``<bits/stdc++.h>`` are dropped (the
+    submission template is assumed to include it); ``<cassert>`` and
+    non-standard headers are kept.
 
     Source markers default to ``//`` comments at file transitions, safe to
     paste into any file. With ``line_markers`` (light/medium only, where
@@ -337,7 +363,7 @@ def minify(
         line, in_raw_string = _collapse_whitespace(
             raw_line, in_raw_string=None, squeeze=not is_directive
         )
-        if not line:
+        if not line or _is_subsumed_include(line):
             continue
         emit_marker()
 
@@ -402,9 +428,10 @@ def raw_token_stream(
 ) -> list[tuple[bytes, bytes]]:
     """Lex ``code`` with clang's raw lexer into (kind, spelling) tokens.
 
-    Whitespace and comments are dropped, as are ``#line`` directives and
-    the ``#pragma GCC diagnostic`` lines added by :func:`minify`, so the
-    stream of a file and of its minified form should be identical.
+    Whitespace and comments are dropped, as are ``#line`` directives, the
+    ``#pragma GCC diagnostic`` lines added by :func:`minify`, and system
+    includes subsumed by ``<bits/stdc++.h>`` (which :func:`minify` drops),
+    so the stream of a file and of its minified form should be identical.
     """
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpfile = pathlib.Path(tmpdir) / "code.cpp"
@@ -437,6 +464,12 @@ def raw_token_stream(
         if spellings[:2] == [b"#", b"line"]:
             continue
         if spellings[:4] == [b"#", b"pragma", b"GCC", b"diagnostic"]:
+            continue
+        if (
+            spellings[:3] == [b"#", b"include", b"<"]
+            and spellings[-1] == b">"
+            and b"".join(spellings[3:-1]).decode() in STDCXX_SUBSUMED_INCLUDES
+        ):
             continue
         tokens.extend(line_tokens)
     return tokens
