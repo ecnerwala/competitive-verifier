@@ -38,9 +38,10 @@ _LINE_DIRECTIVE_RE = re.compile(rb'\s*#\s*line\s+(\d+)\s+(".*")\s*')
 _RAW_STRING_START_RE = re.compile(rb'(?:u8|[uUL])?R"([^ ()\\\t\v\f\n"]*)\(')
 _SYSTEM_INCLUDE_RE = re.compile(rb"\s*#\s*include\s*<([^>]+)>\s*")
 
-# A submission template is assumed to start with #include <bits/stdc++.h>,
-# so includes it subsumes are dropped from minified output. <cassert> is
-# NOT subsumed: recent libstdc++ no longer pulls it into <bits/stdc++.h>.
+# Includes subsumed by <bits/stdc++.h> are replaced in minified output by
+# a single include of it (a no-op duplicate when pasted into a submission
+# template that already has it). <cassert> is NOT subsumed: recent
+# libstdc++ no longer pulls it into <bits/stdc++.h>.
 STDCXX_SUBSUMED_INCLUDES = frozenset(
     (CXX_STANDARD_LIBS | C_STANDARD_LIBS | CXX_C_ORIGIN_LIBS | {BITS_STDCXX_H})
     - {"cassert", "assert.h"}
@@ -293,9 +294,11 @@ def minify(
     keeps one statement per line; ``level="light"`` only strips comments,
     blank lines, and trailing whitespace.
 
-    System includes subsumed by ``<bits/stdc++.h>`` are dropped (the
-    submission template is assumed to include it); ``<cassert>`` and
-    non-standard headers are kept.
+    System includes subsumed by ``<bits/stdc++.h>`` are replaced by a
+    single ``#include <bits/stdc++.h>``, so the output stays
+    self-contained and is a no-op duplicate when pasted into a template
+    that already includes it; ``<cassert>`` and non-standard headers are
+    kept.
 
     Source markers default to ``//`` comments at file transitions, safe to
     paste into any file. With ``line_markers`` (light/medium only, where
@@ -304,6 +307,11 @@ def minify(
     header lines.
     """
     uncommented = _uncomment(code, compiler=compiler)
+    prelude = (
+        [b"#include <%s>" % BITS_STDCXX_H.encode()]
+        if any(_is_subsumed_include(ln) for ln in uncommented.split(b"\n"))
+        else []
+    )
     if level != "full":
         lined = _minify_lines(
             uncommented, squeeze=level == "medium", line_markers=line_markers
@@ -311,8 +319,8 @@ def minify(
         if not lined:
             return lined
         if level == "medium":
-            return _wrap_diagnostics(lined.splitlines())
-        return _wrap_noformat(lined.splitlines())
+            return _wrap_diagnostics(prelude + lined.splitlines())
+        return _wrap_noformat(prelude + lined.splitlines())
 
     out: list[bytes] = []
     packed = bytearray()
@@ -390,7 +398,7 @@ def minify(
     flush_packed()
     if not out:
         return b""
-    return _wrap_diagnostics(out)
+    return _wrap_diagnostics(prelude + out)
 
 
 # Keep clang-format and JetBrains IDEs from reflowing the minified region.

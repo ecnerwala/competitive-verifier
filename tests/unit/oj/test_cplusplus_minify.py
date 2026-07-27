@@ -108,12 +108,14 @@ def test_stdcxx_subsumed_includes_are_dropped():
     )
     packed = _minify_str(code)
     assert packed == (
+        "#include <bits/stdc++.h>\n"
         "#include <cassert>\n#include <ext/pb_ds/assoc_container.hpp>\nint x=1;\n"
     )
     light = minify(code.encode(), compiler="g++", level="light").decode()
     assert (
         light
         == _NOFORMAT_ON
+        + "#include <bits/stdc++.h>\n"
         + "#include <cassert>\n#include <ext/pb_ds/assoc_container.hpp>\nint x = 1;\n"
         + _NOFORMAT_OFF
     )
