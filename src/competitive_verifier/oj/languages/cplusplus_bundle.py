@@ -245,6 +245,7 @@ class Bundler:
     pragma_once: set[pathlib.Path]
     pragma_once_system: set[str]
     result_lines: list[bytes]
+    system_include_lines: list[bytes]
     path_stack: set[pathlib.Path]
     compiler: str
 
@@ -260,8 +261,16 @@ class Bundler:
         self.pragma_once = set()
         self.pragma_once_system = set()
         self.result_lines = []
+        self.system_include_lines = []
         self.path_stack = set()
         self.compiler = compiler
+
+    # Top-level system includes are hoisted into a single block at the top of
+    # the bundle (they are order-independent and deduplicated globally, so
+    # this keeps the output tidy); a #line marker replaces each one to keep
+    # the numbering of the following lines correct.
+    def _hoist_system_include(self, included: str) -> None:
+        self.system_include_lines.append(f"#include <{included}>\n".encode())
 
     # これをしないと __FILE__ や __LINE__ が壊れる
     def _line(self, line: int, path: pathlib.Path) -> None:
@@ -438,27 +447,25 @@ class Bundler:
                         or included in CXX_STANDARD_LIBS
                         or included in CXX_C_ORIGIN_LIBS
                     ):
-                        if BITS_STDCXX_H in self.pragma_once_system:
-                            self._line(i + 2, path)
-                        else:
+                        if BITS_STDCXX_H not in self.pragma_once_system:
                             self.pragma_once_system.add(included)
-                            self.result_lines.append(line)
+                            self._hoist_system_include(included)
+                        self._line(i + 2, path)
                     elif included in EXT_LIBS:
-                        if BITS_EXTCXX_H in self.pragma_once_system:
-                            self._line(i + 2, path)
-                        else:
+                        if BITS_EXTCXX_H not in self.pragma_once_system:
                             self.pragma_once_system.add(included)
-                            self.result_lines.append(line)
+                            self._hoist_system_include(included)
+                        self._line(i + 2, path)
                     elif included in TR1_LIBS:
-                        if BITS_STDTR1CXX_H in self.pragma_once_system:
-                            self._line(i + 2, path)
-                        else:
+                        if BITS_STDTR1CXX_H not in self.pragma_once_system:
                             self.pragma_once_system.add(included)
-                            self.result_lines.append(line)
+                            self._hoist_system_include(included)
+                        self._line(i + 2, path)
                     else:
                         # possibly: bits/*, tr2/* boost/*, c-posix library, etc.
                         self.pragma_once_system.add(included)
-                        self.result_lines.append(line)
+                        self._hoist_system_include(included)
+                        self._line(i + 2, path)
                         if included in [BITS_EXTCXX_H, BITS_STDTR1CXX_H]:
                             self.pragma_once_system.add(BITS_STDCXX_H)
                     continue
@@ -501,4 +508,4 @@ class Bundler:
             self.path_stack.remove(path)
 
     def get(self) -> bytes:
-        return b"".join(self.result_lines)
+        return b"".join(self.system_include_lines) + b"".join(self.result_lines)

@@ -23,7 +23,13 @@ class CppWithoutConfigData(IntegrationData):
                         {
                             "name": "bundled",
                             "path": str(self.config_dir_path / "bundled/aplusb.hpp"),
-                        }
+                        },
+                        {
+                            "name": "minified",
+                            "path": str(
+                                self.config_dir_path / "bundled/aplusb.min.hpp"
+                            ),
+                        },
                     ],
                     "dependencies": ["aplusb.hpp"],
                     "document_attributes": {
@@ -37,7 +43,11 @@ class CppWithoutConfigData(IntegrationData):
                         {
                             "name": "bundled",
                             "path": f"{self.config_dir_path / 'bundled/aplusb.main.cpp'}",
-                        }
+                        },
+                        {
+                            "name": "minified",
+                            "path": f"{self.config_dir_path / 'bundled/aplusb.main.min.cpp'}",
+                        },
                     ],
                     "dependencies": ["aplusb.hpp", "aplusb.main.cpp"],
                     "document_attributes": {
@@ -91,7 +101,13 @@ class CppWithoutConfigData(IntegrationData):
                             "path": str(
                                 self.config_dir_path / "bundled/aplusb.test.cpp"
                             ),
-                        }
+                        },
+                        {
+                            "name": "minified",
+                            "path": str(
+                                self.config_dir_path / "bundled/aplusb.test.min.cpp"
+                            ),
+                        },
                     ],
                     "dependencies": ["aplusb.hpp", "aplusb.test.cpp", "macros.hpp"],
                     "document_attributes": {
@@ -143,7 +159,13 @@ class CppWithoutConfigData(IntegrationData):
                         {
                             "name": "bundled",
                             "path": str(self.config_dir_path / "bundled/macros.hpp"),
-                        }
+                        },
+                        {
+                            "name": "minified",
+                            "path": str(
+                                self.config_dir_path / "bundled/macros.min.hpp"
+                            ),
+                        },
                     ],
                     "dependencies": ["macros.hpp"],
                     "document_attributes": {
@@ -371,7 +393,13 @@ class CppWithConfigData(CppWithoutConfigData):
                         {
                             "name": "bundled",
                             "path": str(self.config_dir_path / "bundled/aplusb.hpp"),
-                        }
+                        },
+                        {
+                            "name": "minified",
+                            "path": str(
+                                self.config_dir_path / "bundled/aplusb.min.hpp"
+                            ),
+                        },
                     ],
                     "dependencies": ["aplusb.hpp"],
                     "document_attributes": {
@@ -385,7 +413,11 @@ class CppWithConfigData(CppWithoutConfigData):
                         {
                             "name": "bundled",
                             "path": f"{self.config_dir_path / 'bundled/aplusb.main.cpp'}",
-                        }
+                        },
+                        {
+                            "name": "minified",
+                            "path": f"{self.config_dir_path / 'bundled/aplusb.main.min.cpp'}",
+                        },
                     ],
                     "dependencies": ["aplusb.hpp", "aplusb.main.cpp"],
                     "document_attributes": {
@@ -437,7 +469,13 @@ class CppWithConfigData(CppWithoutConfigData):
                             "path": str(
                                 self.config_dir_path / "bundled/aplusb.test.cpp"
                             ),
-                        }
+                        },
+                        {
+                            "name": "minified",
+                            "path": str(
+                                self.config_dir_path / "bundled/aplusb.test.min.cpp"
+                            ),
+                        },
                     ],
                     "dependencies": ["aplusb.hpp", "aplusb.test.cpp", "macros.hpp"],
                     "document_attributes": {
@@ -487,7 +525,13 @@ class CppWithConfigData(CppWithoutConfigData):
                         {
                             "name": "bundled",
                             "path": str(self.config_dir_path / "bundled/macros.hpp"),
-                        }
+                        },
+                        {
+                            "name": "minified",
+                            "path": str(
+                                self.config_dir_path / "bundled/macros.min.hpp"
+                            ),
+                        },
                     ],
                     "dependencies": ["macros.hpp"],
                     "document_attributes": {
