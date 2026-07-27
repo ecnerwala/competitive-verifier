@@ -60,7 +60,7 @@ for (const pre of document.querySelectorAll('.hljs')) {
             }
             attrs += ` data-hit-count="${hitText}"`
         }
-        return `<span class="${cls}"${attrs}>${line || '\n'}</span>`
+        return `<span class="${cls}"${attrs}><span class="code-line-text">${line || '\n'}</span></span>`
     }).join('')
     if (hasCoverage) {
         pre.classList.add('coverage-code')
