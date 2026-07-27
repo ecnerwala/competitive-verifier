@@ -110,7 +110,7 @@ for (const btn of document.getElementsByClassName('code-copy-btn')) {
         const code = target
             ? document.getElementById(target).querySelector('code')
             : this.closest('.code').querySelector('.hljs:not(.disable) code')
-        navigator.clipboard.writeText(rawText.get(code) ?? code.innerText)
+        navigator.clipboard.writeText(rawText.get(code))
 
         this.classList.remove("hint--disable")
         await new Promise(r => setTimeout(r, 700))
