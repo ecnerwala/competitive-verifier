@@ -54,11 +54,37 @@ def _uncomment(code: bytes, *, compiler: str) -> bytes:
     return b"\n".join(lines) + b"\n"
 
 
-def _collapse_whitespace(
-    line: bytes, *, in_raw_string: bytes | None
-) -> tuple[bytes, bytes | None]:
-    """Collapse whitespace runs to single spaces outside literals.
+# A space between tokens can be dropped unless the adjacent characters would
+# lex as one longer token (maximal munch): identifier/number characters and
+# string prefixes/suffixes on both sides, or a two-character sequence that
+# forms (or extends) an operator, comment, or digraph.
+_WORDLIKE = frozenset(
+    b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_$\"'"
+)
+_MERGING_PAIRS = frozenset(
+    b"++ -- += -= *= /= %= ^= &= |= == != <= >= << >> && || -> :: .. .* <: :> <% %> %: ## /* */ //".split()
+)
+_DIGITS = frozenset(b"0123456789")
 
+
+def _needs_space(left: int, right: int) -> bool:
+    if left in _WORDLIKE and right in _WORDLIKE:
+        return True
+    # A dot next to a digit would be absorbed into a pp-number.
+    if (left in _DIGITS and right == ord(".")) or (
+        left == ord(".") and right in _DIGITS
+    ):
+        return True
+    return bytes((left, right)) in _MERGING_PAIRS
+
+
+def _collapse_whitespace(
+    line: bytes, *, in_raw_string: bytes | None, squeeze: bool = True
+) -> tuple[bytes, bytes | None]:
+    """Collapse whitespace runs outside literals.
+
+    A run becomes a single space, or nothing when ``squeeze`` is set and
+    dropping it cannot merge the neighboring tokens.
     ``in_raw_string`` is the delimiter of the raw string literal the line
     starts inside (or None); the return value carries the same state to
     the next line.
@@ -69,7 +95,7 @@ def _collapse_whitespace(
 
     def flush(upto: int) -> None:
         nonlocal pending_space
-        if pending_space and out:
+        if pending_space and out and (not squeeze or _needs_space(out[-1], line[i])):
             out.append(ord(" "))
         pending_space = False
         out.extend(line[i:upto])
@@ -124,15 +150,20 @@ def minify(
     uncommented = _uncomment(code, compiler=compiler)
 
     out: list[bytes] = []
-    packed: list[bytes] = []
+    packed = bytearray()
     current_file: bytes | None = None
     pending_marker: bytes | None = None
     in_raw_string: bytes | None = None
 
     def flush_packed() -> None:
         if packed:
-            out.append(b" ".join(packed))
+            out.append(bytes(packed))
             packed.clear()
+
+    def pack(line: bytes) -> None:
+        if packed and _needs_space(packed[-1], line[0]):
+            packed.append(ord(" "))
+        packed.extend(line)
 
     def emit_marker() -> None:
         nonlocal pending_marker
@@ -148,7 +179,7 @@ def minify(
                 raw_line, in_raw_string=in_raw_string
             )
             if packed:
-                packed[-1] += b"\n" + collapsed
+                packed.extend(b"\n" + collapsed)
             else:
                 out[-1] += b"\n" + collapsed
             continue
@@ -161,7 +192,12 @@ def minify(
                 pending_marker = b"#line " + m.group(1) + b" " + path
             continue
 
-        line, in_raw_string = _collapse_whitespace(raw_line, in_raw_string=None)
+        # Directives keep single spaces: in `#define FOO (x)` the space
+        # before `(` distinguishes an object-like from a function-like macro.
+        is_directive = raw_line.lstrip(b" \t\v\f").startswith(b"#")
+        line, in_raw_string = _collapse_whitespace(
+            raw_line, in_raw_string=None, squeeze=not is_directive
+        )
         if not line:
             continue
         emit_marker()
@@ -180,9 +216,9 @@ def minify(
             out.append(line)
             continue
 
-        if packed and len(b" ".join(packed)) + 1 + len(line) > width:
+        if packed and len(packed) + 1 + len(line) > width:
             flush_packed()
-        packed.append(line)
+        pack(line)
         if in_raw_string is not None:
             flush_packed()
 

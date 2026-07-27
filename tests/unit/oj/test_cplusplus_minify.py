@@ -1,3 +1,4 @@
+import re
 import shutil
 import textwrap
 
@@ -28,7 +29,7 @@ def test_strips_comments_and_packs_lines():
         int w = 4;
         """
     )
-    assert out == "int x = 1; int y = 2; int z = 3; int w = 4;\n"
+    assert out == "int x=1;int y=2;int z=3;int w=4;\n"
 
 
 def test_keeps_source_markers_at_file_transitions():
@@ -47,7 +48,7 @@ def test_keeps_source_markers_at_file_transitions():
     assert out == textwrap.dedent(
         """\
         #line 1 "src/a.hpp"
-        int a; int a2;
+        int a;int a2;
         #line 1 "src/b.hpp"
         int b;
         #line 10 "src/a.hpp"
@@ -70,8 +71,8 @@ def test_directives_keep_their_own_lines():
         """\
         #include <vector>
         #define FOO(a) \\
-        ((a) + 1)
-        int x = FOO(1); int y = FOO(2);
+        ((a)+1)
+        int x=FOO(1);int y=FOO(2);
         """
     )
 
@@ -86,7 +87,7 @@ def test_string_literals_are_preserved():
     )
     assert (
         out
-        == 'const char* a = "two  spaces /* not a comment */"; const char* b = "\\"  \\\\"; char c = \' \';\n'
+        == 'const char*a="two  spaces /* not a comment */";const char*b="\\"  \\\\";char c=\' \';\n'
     )
 
 
@@ -100,10 +101,24 @@ def test_raw_strings_are_preserved():
     )
     assert out == textwrap.dedent(
         """\
-        const char* r = R"x(keep  //  this
+        const char*r=R"x(keep  //  this
         and  this)x";
-        int y = 0;
+        int y=0;
         """
+    )
+
+
+def test_squeeze_keeps_token_separating_spaces():
+    out = _minify_str(
+        """\
+        int q = a + +b - -c;
+        bool r = x < y && y > z;
+        const char* s = u8"a" "b";
+        auto t = 1 . nothing;
+        """
+    )
+    assert out == (
+        'int q=a+ +b- -c;bool r=x<y&&y>z;const char*s=u8"a" "b";auto t=1 .nothing;\n'
     )
 
 
@@ -113,4 +128,4 @@ def test_width_limit():
     lines = out.splitlines()
     assert len(lines) > 1
     assert all(len(line) <= 120 for line in lines)
-    assert out.replace("\n", " ").split() == code.replace("\n", " ").split()
+    assert re.sub(r"\s+", "", out) == re.sub(r"\s+", "", code)
