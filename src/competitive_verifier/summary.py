@@ -62,7 +62,9 @@ class TableWriter:
         fp.write("|\n")
 
     def write_table_file_result(
-        self, results: list[tuple[pathlib.Path, FileResult]]
+        self,
+        results: list[tuple[pathlib.Path, FileResult]],
+        environments: list[str | None],
     ) -> None:
         for p, fr in results:
             counter = Counter(r.status for r in fr.verifications)
@@ -72,25 +74,29 @@ class TableWriter:
                 emoji_status = "⚠"
             else:
                 emoji_status = "✔"
-            elapsed = sum(r.elapsed for r in fr.verifications)
-            slowest = max(
-                (r.slowest for r in fr.verifications if r.slowest is not None),
-                default=None,
-            )
-            heaviest = max(
-                (r.heaviest for r in fr.verifications if r.heaviest is not None),
-                default=None,
-            )
-            self.write_table_line(
+            cells = [
                 _with_icon(emoji_status, p.as_posix()),
                 str(counter.get(SUCCESS, "-")),
                 str(counter.get(FAILURE, "-")),
                 str(counter.get(SKIPPED, "-")),
                 str(sum(counter.values())),
-                to_human_str_seconds(elapsed),
-                "-" if slowest is None else to_human_str_seconds(slowest),
-                "-" if heaviest is None else to_human_str_mega_bytes(heaviest),
-            )
+            ]
+            for env in environments:
+                vs = [v for v in fr.verifications if v.verification_name == env]
+                slowest = max(
+                    (v.slowest for v in vs if v.slowest is not None),
+                    default=None,
+                )
+                heaviest = max(
+                    (v.heaviest for v in vs if v.heaviest is not None),
+                    default=None,
+                )
+                cells += [
+                    to_human_str_seconds(sum(v.elapsed for v in vs)) if vs else "-",
+                    "-" if slowest is None else to_human_str_seconds(slowest),
+                    "-" if heaviest is None else to_human_str_mega_bytes(heaviest),
+                ]
+            self.write_table_line(*cells)
 
 
 def write_summary(fp: IO[str], result: VerifyCommandResult):
@@ -132,40 +138,65 @@ def write_summary(fp: IO[str], result: VerifyCommandResult):
     fp.write(_with_icon("⚠", "Test case results containts `skipped`"))
     fp.write("\n\n\n")
 
+    # One Elapsed/Slowest/Heaviest column group per verification environment,
+    # so environments with different performance characteristics (e.g. a
+    # sanitizer environment vs. a plain benchmark environment) get separate
+    # timing columns. Unnamed verifications form their own unlabeled group.
+    names = {
+        v.verification_name
+        for _, fr in chain(file_results, past_results)
+        for v in fr.verifications
+    }
+    environments: list[str | None] = [*sorted(n for n in names if n is not None)]
+    if None in names or not environments:
+        environments.append(None)
+
     header = [
         _with_icon("📝", "File"),
         "✔<br>Passed",
         "❌<br>Failed",
         "⚠<br>Skipped",
         "∑<br>Total",
-        "⏳<br>Elapsed",
-        "🦥<br>Slowest",
-        "🐘<br>Heaviest",
     ]
+    for env in environments:
+        header += [
+            f"⏳<br>{env}" if env is not None else "⏳<br>Elapsed",
+            f"🦥<br>{env}" if env is not None else "🦥<br>Slowest",
+            f"🐘<br>{env}" if env is not None else "🐘<br>Heaviest",
+        ]
     alignment = [":---"] + [":---:"] * (len(header) - 1)
 
     if file_results:
         fp.write("## Results\n")
         tb = TableWriter(fp, header)
         tb.write_table_line(*alignment)
-        tb.write_table_line(
+        sum_cells = [
             "_**Sum**_",
             str(counter.get(SUCCESS, "-")),
             str(counter.get(FAILURE, "-")),
             str(counter.get(SKIPPED, "-")),
             str(sum(counter.values())),
-            to_human_str_seconds(result.total_seconds),
-            "-",
-            "-",
-        )
+        ]
+        if environments == [None]:
+            sum_cells += [to_human_str_seconds(result.total_seconds), "-", "-"]
+        else:
+            for env in environments:
+                elapsed = sum(
+                    v.elapsed
+                    for _, fr in file_results
+                    for v in fr.verifications
+                    if v.verification_name == env
+                )
+                sum_cells += [to_human_str_seconds(elapsed), "-", "-"]
+        tb.write_table_line(*sum_cells)
         tb.write_table_line(*[""] * len(header))
-        tb.write_table_file_result(file_results)
+        tb.write_table_file_result(file_results, environments)
 
     if past_results:
         fp.write("## Past results\n")
         tb = TableWriter(fp, header)
         tb.write_table_line(*alignment)
-        tb.write_table_file_result(past_results)
+        tb.write_table_file_result(past_results, environments)
 
     if counter.get(FAILURE):
         first_failure = True

@@ -224,18 +224,18 @@ test_summary_params = [
 
 
 ## Results
-|📝&nbsp;&nbsp;File|✔<br>Passed|❌<br>Failed|⚠<br>Skipped|∑<br>Total|⏳<br>Elapsed|🦥<br>Slowest|🐘<br>Heaviest|
-|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-|_**Sum**_|3|3|1|7|4.2s|-|-|
-|||||||||
-|❌&nbsp;&nbsp;foo/bar.py|-|2|-|2|3.0s|420ms|31.4MB|
-|✔&nbsp;&nbsp;foo/baz.py|2|-|-|2|3.0s|420ms|31.4MB|
-|❌&nbsp;&nbsp;hoge.py|1|1|-|2|3.0s|420ms|31.4MB|
-|⚠&nbsp;&nbsp;piyo.py|-|-|1|1|2.0s|-|-|
+|📝&nbsp;&nbsp;File|✔<br>Passed|❌<br>Failed|⚠<br>Skipped|∑<br>Total|⏳<br>fi|🦥<br>fi|🐘<br>fi|⏳<br>ver|🦥<br>ver|🐘<br>ver|⏳<br>Elapsed|🦥<br>Slowest|🐘<br>Heaviest|
+|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+|_**Sum**_|3|3|1|7|1000ms|-|-|1000ms|-|-|9.0s|-|-|
+|||||||||||||||
+|❌&nbsp;&nbsp;foo/bar.py|-|2|-|2|-|-|-|1000ms|420ms|31.4MB|2.0s|-|-|
+|✔&nbsp;&nbsp;foo/baz.py|2|-|-|2|1000ms|420ms|31.4MB|-|-|-|2.0s|-|-|
+|❌&nbsp;&nbsp;hoge.py|1|1|-|2|-|-|-|-|-|-|3.0s|420ms|31.4MB|
+|⚠&nbsp;&nbsp;piyo.py|-|-|1|1|-|-|-|-|-|-|2.0s|-|-|
 ## Past results
-|📝&nbsp;&nbsp;File|✔<br>Passed|❌<br>Failed|⚠<br>Skipped|∑<br>Total|⏳<br>Elapsed|🦥<br>Slowest|🐘<br>Heaviest|
-|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-|✔&nbsp;&nbsp;old.py|2|-|-|2|4.0s|-|-|
+|📝&nbsp;&nbsp;File|✔<br>Passed|❌<br>Failed|⚠<br>Skipped|∑<br>Total|⏳<br>fi|🦥<br>fi|🐘<br>fi|⏳<br>ver|🦥<br>ver|🐘<br>ver|⏳<br>Elapsed|🦥<br>Slowest|🐘<br>Heaviest|
+|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+|✔&nbsp;&nbsp;old.py|2|-|-|2|-|-|-|-|-|-|4.0s|-|-|
 ## Failed tests
 
 ### foo/bar.py
