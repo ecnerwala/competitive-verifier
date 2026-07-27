@@ -174,13 +174,18 @@ def _collapse_whitespace(
     return bytes(out), None
 
 
-def _minify_light(uncommented: bytes) -> bytes:
-    """Drop comments' leftovers and trailing whitespace, keeping structure.
+def _minify_lines(uncommented: bytes, *, squeeze: bool) -> bytes:
+    """Minify keeping one input line per output line.
 
-    ``#line`` markers stay exact: blank lines (including lines emptied by
-    comment stripping) are kept as 1-byte placeholders so numbering is
-    preserved for free, and a blank run is collapsed to a resync ``#line``
-    directive only when the run is longer than the directive itself.
+    Line structure is preserved, so ``#line`` markers stay real directives
+    with exact numbers.
+
+    Comment leftovers and trailing whitespace are dropped; with ``squeeze``
+    indentation and inter-token spaces are compressed too. Blank lines
+    (including lines emptied by comment stripping) are kept as 1-byte
+    placeholders so numbering is preserved for free; a blank run is
+    collapsed to a resync ``#line`` directive when that is shorter, and a
+    pending marker subsumes any blank lines before it.
     """
     out: list[bytes] = []
     current_file: bytes | None = None
@@ -225,15 +230,16 @@ def _minify_light(uncommented: bytes) -> bytes:
             lineno = int(m.group(1))
             need_marker = True
             continue
-        stripped, in_raw_string = _collapse_whitespace(
-            raw_line, in_raw_string=None, squeeze=False
+        is_directive = raw_line.lstrip(b" \t\v\f").startswith(b"#")
+        line, in_raw_string = _collapse_whitespace(
+            raw_line, in_raw_string=None, squeeze=squeeze and not is_directive
         )
-        if not stripped.strip() and in_raw_string is None:
+        if not line.strip() and in_raw_string is None:
             blanks += 1
             lineno += 1
             continue
         flush_gap()
-        out.append(raw_line.rstrip())
+        out.append(line.rstrip() if squeeze else raw_line.rstrip())
         lineno += 1
     # Trailing blank lines can simply be dropped.
     return b"\n".join(out) + b"\n" if out else b""
@@ -244,7 +250,7 @@ def minify(
     *,
     compiler: str = os.environ.get("CXX", "g++"),
     width: int = DEFAULT_WIDTH,
-    level: Literal["light", "full"] = "full",
+    level: Literal["light", "medium", "full"] = "full",
 ) -> bytes:
     """Minify C++ code.
 
@@ -252,12 +258,17 @@ def minify(
     statements onto shared lines; ``#line`` markers become ``//`` comments
     (packing makes their numbering wrong, and on a judge the named files
     do not exist anyway) and warning-ignore pragmas wrap the output.
-    ``level="light"`` only strips comments, blank lines, and trailing
-    whitespace, preserving line structure and exact ``#line`` markers.
+    ``level="medium"`` compresses whitespace the same way but keeps one
+    statement per line; ``level="light"`` only strips comments, blank
+    lines, and trailing whitespace. Both keep line structure and exact
+    ``#line`` markers.
     """
     uncommented = _uncomment(code, compiler=compiler)
-    if level == "light":
-        return _minify_light(uncommented)
+    if level != "full":
+        lined = _minify_lines(uncommented, squeeze=level == "medium")
+        if level == "medium" and lined:
+            return _wrap_diagnostics(lined.splitlines())
+        return lined
 
     out: list[bytes] = []
     packed = bytearray()
@@ -335,11 +346,14 @@ def minify(
     flush_packed()
     if not out:
         return b""
-    # Packing many statements per line makes indentation meaningless, so
-    # silence the warnings that key off it (push/pop so nothing appended
-    # after the minified region is affected). -Wpragmas (GCC) and
-    # -Wunknown-warning-option (clang) keep each compiler quiet about the
-    # other's warning names.
+    return _wrap_diagnostics(out)
+
+
+def _wrap_diagnostics(out: list[bytes]) -> bytes:
+    # Dropping indentation makes it meaningless, so silence the warnings
+    # that key off it (push/pop so nothing appended after the minified
+    # region is affected). -Wpragmas (GCC) and -Wunknown-warning-option
+    # (clang) keep each compiler quiet about the other's warning names.
     prologue = [
         b"#pragma GCC diagnostic push",
         b'#pragma GCC diagnostic ignored "-Wpragmas"',
