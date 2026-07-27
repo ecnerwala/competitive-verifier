@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 import logging
 import os
 import pathlib
@@ -224,18 +225,33 @@ test_summary_params = [
 
 
 ## Results
-|📝&nbsp;&nbsp;File|✔<br>Passed|❌<br>Failed|⚠<br>Skipped|∑<br>Total|⏳<br>fi|🦥<br>fi|🐘<br>fi|⏳<br>ver|🦥<br>ver|🐘<br>ver|⏳<br>Elapsed|🦥<br>Slowest|🐘<br>Heaviest|
-|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-|_**Sum**_|3|3|1|7|1000ms|-|-|1000ms|-|-|9.0s|-|-|
-|||||||||||||||
-|❌&nbsp;&nbsp;foo/bar.py|-|2|-|2|-|-|-|1000ms|420ms|31.4MB|2.0s|-|-|
-|✔&nbsp;&nbsp;foo/baz.py|2|-|-|2|1000ms|420ms|31.4MB|-|-|-|2.0s|-|-|
-|❌&nbsp;&nbsp;hoge.py|1|1|-|2|-|-|-|-|-|-|3.0s|420ms|31.4MB|
-|⚠&nbsp;&nbsp;piyo.py|-|-|1|1|-|-|-|-|-|-|2.0s|-|-|
+
+<table>
+<thead>
+<tr><th rowspan="2" align="left">📝&nbsp;&nbsp;File</th><th rowspan="2">✔<br>Passed</th><th rowspan="2">❌<br>Failed</th><th rowspan="2">⚠<br>Skipped</th><th rowspan="2">∑<br>Total</th><th colspan="3">fi</th><th colspan="3">ver</th><th colspan="3"></th></tr>
+<tr><th>⏳<br>Elapsed</th><th>🦥<br>Slowest</th><th>🐘<br>Heaviest</th><th>⏳<br>Elapsed</th><th>🦥<br>Slowest</th><th>🐘<br>Heaviest</th><th>⏳<br>Elapsed</th><th>🦥<br>Slowest</th><th>🐘<br>Heaviest</th></tr>
+</thead>
+<tbody>
+<tr><td align="left"><b><i>Sum</i></b></td><td align="center">3</td><td align="center">3</td><td align="center">1</td><td align="center">7</td><td align="center">1000ms</td><td align="center">-</td><td align="center">-</td><td align="center">1000ms</td><td align="center">-</td><td align="center">-</td><td align="center">9.0s</td><td align="center">-</td><td align="center">-</td></tr>
+<tr><td align="left">❌&nbsp;&nbsp;foo/bar.py</td><td align="center">-</td><td align="center">2</td><td align="center">-</td><td align="center">2</td><td align="center">-</td><td align="center">-</td><td align="center">-</td><td align="center">1000ms</td><td align="center">420ms</td><td align="center">31.4MB</td><td align="center">2.0s</td><td align="center">-</td><td align="center">-</td></tr>
+<tr><td align="left">✔&nbsp;&nbsp;foo/baz.py</td><td align="center">2</td><td align="center">-</td><td align="center">-</td><td align="center">2</td><td align="center">1000ms</td><td align="center">420ms</td><td align="center">31.4MB</td><td align="center">-</td><td align="center">-</td><td align="center">-</td><td align="center">2.0s</td><td align="center">-</td><td align="center">-</td></tr>
+<tr><td align="left">❌&nbsp;&nbsp;hoge.py</td><td align="center">1</td><td align="center">1</td><td align="center">-</td><td align="center">2</td><td align="center">-</td><td align="center">-</td><td align="center">-</td><td align="center">-</td><td align="center">-</td><td align="center">-</td><td align="center">3.0s</td><td align="center">420ms</td><td align="center">31.4MB</td></tr>
+<tr><td align="left">⚠&nbsp;&nbsp;piyo.py</td><td align="center">-</td><td align="center">-</td><td align="center">1</td><td align="center">1</td><td align="center">-</td><td align="center">-</td><td align="center">-</td><td align="center">-</td><td align="center">-</td><td align="center">-</td><td align="center">2.0s</td><td align="center">-</td><td align="center">-</td></tr>
+</tbody>
+</table>
+
 ## Past results
-|📝&nbsp;&nbsp;File|✔<br>Passed|❌<br>Failed|⚠<br>Skipped|∑<br>Total|⏳<br>fi|🦥<br>fi|🐘<br>fi|⏳<br>ver|🦥<br>ver|🐘<br>ver|⏳<br>Elapsed|🦥<br>Slowest|🐘<br>Heaviest|
-|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-|✔&nbsp;&nbsp;old.py|2|-|-|2|-|-|-|-|-|-|4.0s|-|-|
+
+<table>
+<thead>
+<tr><th rowspan="2" align="left">📝&nbsp;&nbsp;File</th><th rowspan="2">✔<br>Passed</th><th rowspan="2">❌<br>Failed</th><th rowspan="2">⚠<br>Skipped</th><th rowspan="2">∑<br>Total</th><th colspan="3">fi</th><th colspan="3">ver</th><th colspan="3"></th></tr>
+<tr><th>⏳<br>Elapsed</th><th>🦥<br>Slowest</th><th>🐘<br>Heaviest</th><th>⏳<br>Elapsed</th><th>🦥<br>Slowest</th><th>🐘<br>Heaviest</th><th>⏳<br>Elapsed</th><th>🦥<br>Slowest</th><th>🐘<br>Heaviest</th></tr>
+</thead>
+<tbody>
+<tr><td align="left">✔&nbsp;&nbsp;old.py</td><td align="center">2</td><td align="center">-</td><td align="center">-</td><td align="center">2</td><td align="center">-</td><td align="center">-</td><td align="center">-</td><td align="center">-</td><td align="center">-</td><td align="center">-</td><td align="center">4.0s</td><td align="center">-</td><td align="center">-</td></tr>
+</tbody>
+</table>
+
 ## Failed tests
 
 ### foo/bar.py
