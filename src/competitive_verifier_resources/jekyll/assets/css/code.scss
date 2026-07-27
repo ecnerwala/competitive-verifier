@@ -36,6 +36,7 @@
 .hljs {
     padding: 0;
     display: block;
+    tab-size: 4;
     
     &.disable {
         display: none;
@@ -225,16 +226,23 @@ ul.index-files {
 }
 
 .code-line {
-    display: block;
+    // Flex row so the code text is its own box: tab stops are then
+    // measured from the start of the code, not from the gutter.
+    display: flex;
     width: 100%;
 
     &::before {
         content: attr(data-line-no);
-        display: inline-block;
+        flex: none;
         white-space: pre;
         margin-right: 1em;
         color: #bbb;
         user-select: none;
+    }
+
+    .code-line-text {
+        white-space: pre;
+        flex: none;
     }
 
     &.coverage-hit {
