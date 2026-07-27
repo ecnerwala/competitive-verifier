@@ -17,18 +17,21 @@ _has_gcc = shutil.which("g++") is not None and _check_compiler("g++") == "gcc"
 pytestmark = pytest.mark.skipif(not _has_gcc, reason="g++ (GNU) is not installed")
 
 
+_NOFORMAT_ON = "// clang-format off\n// @formatter:off\n"
+_NOFORMAT_OFF = "// clang-format on\n// @formatter:on\n"
+
 _PROLOGUE = (
-    "#pragma GCC diagnostic push\n"
+    _NOFORMAT_ON + "#pragma GCC diagnostic push\n"
     '#pragma GCC diagnostic ignored "-Wpragmas"\n'
     '#pragma GCC diagnostic ignored "-Wunknown-warning-option"\n'
     '#pragma GCC diagnostic ignored "-Wmisleading-indentation"\n'
     '#pragma GCC diagnostic ignored "-Wmultistatement-macros"\n'
 )
-_EPILOGUE = "#pragma GCC diagnostic pop\n"
+_EPILOGUE = "#pragma GCC diagnostic pop\n" + _NOFORMAT_OFF
 
 
 def _minify_str(code: str) -> str:
-    out = minify(textwrap.dedent(code).encode(), compiler="g++").decode()
+    out = minify(textwrap.dedent(code).encode(), compiler="g++", level="full").decode()
     assert out.startswith(_PROLOGUE)
     assert out.endswith(_EPILOGUE)
     return out[len(_PROLOGUE) : -len(_EPILOGUE)]
@@ -148,10 +151,11 @@ def test_width_limit():
 
 
 def test_warning_pragmas_wrap_output():
-    out = minify(b"int x = 1;\n", compiler="g++").decode()
-    assert out.startswith(_PROLOGUE)
-    assert out.endswith(_EPILOGUE)
-    assert minify(b"", compiler="g++") == b""
+    for level in ("medium", "full"):
+        out = minify(b"int x = 1;\n", compiler="g++", level=level).decode()
+        assert out.startswith(_PROLOGUE)
+        assert out.endswith(_EPILOGUE)
+        assert minify(b"", compiler="g++", level=level) == b""
 
 
 def test_target_pragma_macro_dump_is_dropped():
@@ -188,8 +192,9 @@ _GNARLY = textwrap.dedent(
 
 @pytest.mark.skipif(shutil.which("clang++") is None, reason="clang++ not installed")
 def test_token_stream_is_preserved():
-    minified = minify(_GNARLY, compiler="g++")
-    assert raw_token_stream(_GNARLY) == raw_token_stream(minified)
+    for level in ("light", "medium", "full"):
+        minified = minify(_GNARLY, compiler="g++", level=level)
+        assert raw_token_stream(_GNARLY) == raw_token_stream(minified)
 
 
 def test_light_keeps_line_structure_and_markers():
@@ -235,15 +240,34 @@ def test_light_keeps_line_structure_and_markers():
         int c = 3;
         """
     ).encode()
-    out = minify(code, compiler="g++", level="light").decode()
-    assert out == textwrap.dedent(
-        """\
+    out = minify(code, compiler="g++", level="light", line_markers=True).decode()
+    assert (
+        out
+        == _NOFORMAT_ON
+        + textwrap.dedent(
+            """\
         #line 1 "src/a.hpp"
         int a = 1;
         #line 36 "src/a.hpp"
         int b = 2;
         int c = 3;
         """
+        )
+        + _NOFORMAT_OFF
+    )
+    out = minify(code, compiler="g++", level="light").decode()
+    assert (
+        out
+        == _NOFORMAT_ON
+        + textwrap.dedent(
+            """\
+        // src/a.hpp
+        int a = 1;
+        int b = 2;
+        int c = 3;
+        """
+        )
+        + _NOFORMAT_OFF
     )
 
 
@@ -261,8 +285,10 @@ def test_light_collapses_marker_runs():
         int c = 1;
         """
     ).encode()
-    out = minify(code, compiler="g++", level="light")
-    assert out == b'#line 12 "src/c.hpp"\nint c = 1;\n'
+    out = minify(code, compiler="g++", level="light", line_markers=True).decode()
+    assert out == _NOFORMAT_ON + '#line 12 "src/c.hpp"\nint c = 1;\n' + _NOFORMAT_OFF
+    out = minify(code, compiler="g++", level="light").decode()
+    assert out == _NOFORMAT_ON + "// src/c.hpp\nint c = 1;\n" + _NOFORMAT_OFF
 
 
 def test_medium_squeezes_but_keeps_lines():
@@ -274,16 +300,28 @@ def test_medium_squeezes_but_keeps_lines():
         #define FOO (x)
         """
     ).encode()
-    out = minify(code, compiler="g++", level="medium").decode()
+    out = minify(code, compiler="g++", level="medium", line_markers=True).decode()
     assert out.startswith(_PROLOGUE)
     assert out.endswith(_EPILOGUE)
     body = out[len(_PROLOGUE) : -len(_EPILOGUE)]
     assert body == (
         '#line 1 "src/a.hpp"\nint a=f(x+1);\nbool r=x<y&&y>z;\n#define FOO (x)\n'
     )
+    out = minify(code, compiler="g++", level="medium").decode()
+    body = out[len(_PROLOGUE) : -len(_EPILOGUE)]
+    assert body == "// src/a.hpp\nint a=f(x+1);\nbool r=x<y&&y>z;\n#define FOO (x)\n"
 
 
 def test_light_keeps_short_blank_runs():
     code = b'#line 1 "src/a.hpp"\nint a = 1;\n\nint b = 2;\n'
-    out = minify(code, compiler="g++", level="light")
-    assert out == b'#line 1 "src/a.hpp"\nint a = 1;\n\nint b = 2;\n'
+    out = minify(code, compiler="g++", level="light", line_markers=True).decode()
+    assert (
+        out
+        == _NOFORMAT_ON
+        + '#line 1 "src/a.hpp"\nint a = 1;\n\nint b = 2;\n'
+        + _NOFORMAT_OFF
+    )
+    out = minify(code, compiler="g++", level="light").decode()
+    assert (
+        out == _NOFORMAT_ON + "// src/a.hpp\nint a = 1;\nint b = 2;\n" + _NOFORMAT_OFF
+    )

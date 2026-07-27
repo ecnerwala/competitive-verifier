@@ -174,31 +174,41 @@ def _collapse_whitespace(
     return bytes(out), None
 
 
-def _minify_lines(uncommented: bytes, *, squeeze: bool) -> bytes:
+def _minify_lines(uncommented: bytes, *, squeeze: bool, line_markers: bool) -> bytes:
     """Minify keeping one input line per output line.
 
-    Line structure is preserved, so ``#line`` markers stay real directives
-    with exact numbers.
-
     Comment leftovers and trailing whitespace are dropped; with ``squeeze``
-    indentation and inter-token spaces are compressed too. Blank lines
-    (including lines emptied by comment stripping) are kept as 1-byte
-    placeholders so numbering is preserved for free; a blank run is
-    collapsed to a resync ``#line`` directive when that is shorter, and a
-    pending marker subsumes any blank lines before it.
+    indentation and inter-token spaces are compressed too.
+
+    With ``line_markers`` the ``#line`` markers stay real directives with
+    exact numbers: blank lines (including lines emptied by comment
+    stripping) are kept as 1-byte placeholders so numbering is preserved
+    for free, a blank run is collapsed to a resync ``#line`` directive when
+    that is shorter, and a pending marker subsumes any blank lines before
+    it. Without it, markers become ``//`` comments at file transitions
+    (safe to paste anywhere) and blank runs are dropped entirely.
     """
     out: list[bytes] = []
     current_file: bytes | None = None
+    marked_file: bytes | None = None
     lineno = 0
     blanks = 0
     need_marker = False
     in_raw_string: bytes | None = None
 
     def flush_gap() -> None:
+        nonlocal blanks, need_marker, marked_file
+        if not line_markers:
+            if need_marker and current_file != marked_file:
+                assert current_file is not None
+                out.append(b"// " + current_file.strip(b'"'))
+                marked_file = current_file
+            need_marker = False
+            blanks = 0
+            return
         # A pending marker subsumes any blank lines before it; a bare blank
         # run is kept as 1-byte placeholders unless a resync directive is
         # shorter.
-        nonlocal blanks, need_marker
         if need_marker:
             assert current_file is not None
             out.append(b"#line %d %s" % (lineno, current_file))
@@ -250,25 +260,33 @@ def minify(
     *,
     compiler: str = os.environ.get("CXX", "g++"),
     width: int = DEFAULT_WIDTH,
-    level: Literal["light", "medium", "full"] = "full",
+    level: Literal["light", "medium", "full"] = "medium",
+    line_markers: bool = False,
 ) -> bytes:
     """Minify C++ code.
 
     ``level="full"`` strips comments, collapses whitespace, and packs
-    statements onto shared lines; ``#line`` markers become ``//`` comments
-    (packing makes their numbering wrong, and on a judge the named files
-    do not exist anyway) and warning-ignore pragmas wrap the output.
-    ``level="medium"`` compresses whitespace the same way but keeps one
-    statement per line; ``level="light"`` only strips comments, blank
-    lines, and trailing whitespace. Both keep line structure and exact
-    ``#line`` markers.
+    statements onto shared lines, with warning-ignore pragmas wrapping the
+    output. ``level="medium"`` compresses whitespace the same way but
+    keeps one statement per line; ``level="light"`` only strips comments,
+    blank lines, and trailing whitespace.
+
+    Source markers default to ``//`` comments at file transitions, safe to
+    paste into any file. With ``line_markers`` (light/medium only, where
+    line structure survives) they stay real ``#line`` directives with
+    exact numbers, so in-repo compiles report errors at the original
+    header lines.
     """
     uncommented = _uncomment(code, compiler=compiler)
     if level != "full":
-        lined = _minify_lines(uncommented, squeeze=level == "medium")
-        if level == "medium" and lined:
+        lined = _minify_lines(
+            uncommented, squeeze=level == "medium", line_markers=line_markers
+        )
+        if not lined:
+            return lined
+        if level == "medium":
             return _wrap_diagnostics(lined.splitlines())
-        return lined
+        return _wrap_noformat(lined.splitlines())
 
     out: list[bytes] = []
     packed = bytearray()
@@ -349,6 +367,15 @@ def minify(
     return _wrap_diagnostics(out)
 
 
+# Keep clang-format and JetBrains IDEs from reflowing the minified region.
+_NOFORMAT_ON = [b"// clang-format off", b"// @formatter:off"]
+_NOFORMAT_OFF = [b"// clang-format on", b"// @formatter:on"]
+
+
+def _wrap_noformat(out: list[bytes]) -> bytes:
+    return b"\n".join(_NOFORMAT_ON + out + _NOFORMAT_OFF) + b"\n"
+
+
 def _wrap_diagnostics(out: list[bytes]) -> bytes:
     # Dropping indentation makes it meaningless, so silence the warnings
     # that key off it (push/pop so nothing appended after the minified
@@ -361,7 +388,7 @@ def _wrap_diagnostics(out: list[bytes]) -> bytes:
         b'#pragma GCC diagnostic ignored "-Wmisleading-indentation"',
         b'#pragma GCC diagnostic ignored "-Wmultistatement-macros"',
     ]
-    return b"\n".join(prologue + out + [b"#pragma GCC diagnostic pop"]) + b"\n"
+    return _wrap_noformat(prologue + out + [b"#pragma GCC diagnostic pop"])
 
 
 _RAW_TOKEN_RE = re.compile(
