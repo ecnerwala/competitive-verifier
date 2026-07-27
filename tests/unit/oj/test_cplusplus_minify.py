@@ -247,6 +247,24 @@ def test_light_keeps_line_structure_and_markers():
     )
 
 
+def test_light_collapses_marker_runs():
+    code = textwrap.dedent(
+        """\
+        #line 2 "src/a.hpp"
+        #line 9 "src/a.hpp"
+        #line 2 "src/b.hpp"
+        #line 8 "src/c.hpp"
+
+
+
+
+        int c = 1;
+        """
+    ).encode()
+    out = minify(code, compiler="g++", level="light")
+    assert out == b'#line 12 "src/c.hpp"\nint c = 1;\n'
+
+
 def test_light_keeps_short_blank_runs():
     code = b'#line 1 "src/a.hpp"\nint a = 1;\n\nint b = 2;\n'
     out = minify(code, compiler="g++", level="light")
