@@ -323,9 +323,8 @@ class Bundler:
     ) -> None:
         """Inline quoted includes of the files passed to :meth:`update`.
 
-        :param prelude_includes: system headers emitted at the top of the bundle
-            before any source, as if every bundled file started with
-            ``#include <...>`` of them; later includes they subsume are dropped.
+        :param prelude_includes: system headers emitted verbatim at the top of
+            the bundle before any source; later includes they cover are dropped.
         :param hoist_system_includes: collect top-level ``#include <...>`` lines
             into a single block at the top of the bundle instead of leaving them
             in place.
@@ -341,18 +340,18 @@ class Bundler:
         self.path_stack = set()
         self.compiler = compiler
         for included in prelude_includes:
-            if self._record_system_include(included):
+            if included not in self.pragma_once_system:
+                self._record_system_include(included)
                 self._emit_system_include_at_top(included)
 
     def _emit_system_include_at_top(self, included: str) -> None:
         self.system_include_lines.append(f"#include <{included}>\n".encode())
 
-    # Returns whether a top-level #include <included> must be kept: false if it
-    # was already included or an umbrella header (bits/stdc++.h etc.) covering
-    # it was.
-    def _record_system_include(self, included: str) -> bool:
+    # Whether a top-level #include <included> is redundant: it was already
+    # included, or an umbrella header (bits/stdc++.h etc.) covering it was.
+    def _is_system_include_covered(self, included: str) -> bool:
         if included in self.pragma_once_system:
-            return False
+            return True
         if (
             included in C_STANDARD_LIBS
             or included in CXX_STANDARD_LIBS
@@ -366,12 +365,12 @@ class Bundler:
         else:
             # possibly: bits/*, tr2/* boost/*, c-posix library, etc.
             umbrella = None
-        if umbrella is not None and umbrella in self.pragma_once_system:
-            return False
+        return umbrella is not None and umbrella in self.pragma_once_system
+
+    def _record_system_include(self, included: str) -> None:
         self.pragma_once_system.add(included)
         if included in [BITS_EXTCXX_H, BITS_STDTR1CXX_H]:
             self.pragma_once_system.add(BITS_STDCXX_H)
-        return True
 
     # これをしないと __FILE__ や __LINE__ が壊れる
     def _line(self, line: int, path: pathlib.Path) -> None:
@@ -543,13 +542,15 @@ class Bundler:
                     elif not is_toplevel:
                         # #pragma once 系の判断ができない場合はそっとしておく
                         self.result_lines.append(line)
-                    elif not self._record_system_include(included):
-                        self._line(i + 2, path)
-                    elif self.hoist_system_includes:
-                        self._emit_system_include_at_top(included)
+                    elif self._is_system_include_covered(included):
                         self._line(i + 2, path)
                     else:
-                        self.result_lines.append(line)
+                        self._record_system_include(included)
+                        if self.hoist_system_includes:
+                            self._emit_system_include_at_top(included)
+                            self._line(i + 2, path)
+                        else:
+                            self.result_lines.append(line)
                     continue
 
                 # #include "..."

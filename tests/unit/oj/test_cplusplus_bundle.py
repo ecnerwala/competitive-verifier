@@ -47,6 +47,7 @@ _CODE = """\
     #include <vector>
     #include <bits/stdc++.h>
     #include <map>
+    #include <cassert>
     #include <unistd.h>
     int x = 1;
     #ifdef FOO
@@ -54,6 +55,8 @@ _CODE = """\
     #endif
     int y = 2;
     """
+
+_PRELUDE = ["bits/stdc++.h", "cassert"]
 
 
 def test_default_keeps_system_includes_in_place(tmp_path: pathlib.Path):
@@ -69,12 +72,13 @@ def test_default_keeps_system_includes_in_place(tmp_path: pathlib.Path):
     )
 
 
-def test_prelude_includes_subsume_later_includes(tmp_path: pathlib.Path):
-    out = _bundle(
-        tmp_path, _CODE, keep_markers=True, prelude_includes=["bits/stdc++.h"]
-    )
+def test_prelude_includes_are_verbatim_and_cover_later_includes(
+    tmp_path: pathlib.Path,
+):
+    out = _bundle(tmp_path, _CODE, keep_markers=True, prelude_includes=_PRELUDE)
     assert _LINE_MARKER.sub(b"", out.encode()).decode() == (
         "#include <bits/stdc++.h>\n"
+        "#include <cassert>\n"
         "#include <unistd.h>\n"
         "int x = 1;\n"
         "#ifdef FOO\n"
@@ -83,7 +87,7 @@ def test_prelude_includes_subsume_later_includes(tmp_path: pathlib.Path):
         "int y = 2;\n"
     )
     assert re.search(
-        r'^#line 4 ".*"\n#include <unistd.h>\nint x = 1;$', out, re.MULTILINE
+        r'^#line 5 ".*"\n#include <unistd.h>\nint x = 1;$', out, re.MULTILINE
     )
 
 
@@ -99,18 +103,16 @@ def test_hoist_system_includes(tmp_path: pathlib.Path):
         "#endif\n"
         "int y = 2;\n"
     )
-    assert re.search(r'^#line 5 ".*"\nint x = 1;$', out, re.MULTILINE)
+    assert re.search(r'^#line 6 ".*"\nint x = 1;$', out, re.MULTILINE)
 
 
 def test_hoist_with_prelude(tmp_path: pathlib.Path):
     out = _bundle(
-        tmp_path,
-        _CODE,
-        prelude_includes=["bits/stdc++.h"],
-        hoist_system_includes=True,
+        tmp_path, _CODE, prelude_includes=_PRELUDE, hoist_system_includes=True
     )
     assert out == (
         "#include <bits/stdc++.h>\n"
+        "#include <cassert>\n"
         "#include <unistd.h>\n"
         "int x = 1;\n"
         "#ifdef FOO\n"
