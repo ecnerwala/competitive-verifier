@@ -9,7 +9,6 @@ from competitive_verifier.oj.languages.cplusplus_bundle import (
 )
 from competitive_verifier.oj.languages.cplusplus_minify import (
     minify,
-    raw_token_stream,
 )
 
 _has_gcc = shutil.which("g++") is not None and _check_compiler("g++") == "gcc"
@@ -218,8 +217,7 @@ _GNARLY = textwrap.dedent(
 @pytest.mark.skipif(shutil.which("clang++") is None, reason="clang++ not installed")
 def test_token_stream_is_preserved():
     for level in ("light", "medium", "full"):
-        minified = minify(_GNARLY, compiler="g++", level=level)
-        assert raw_token_stream(_GNARLY) == raw_token_stream(minified)
+        minify(_GNARLY, compiler="g++", level=level, check=True)
 
 
 def test_light_keeps_line_structure_and_markers():

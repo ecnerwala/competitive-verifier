@@ -276,6 +276,10 @@ def _minify_lines(uncommented: bytes, *, squeeze: bool, line_markers: bool) -> b
     return b"\n".join(out) + b"\n" if out else b""
 
 
+class MinifyCheckError(Exception):
+    """Minification changed the raw token stream of the code."""
+
+
 def minify(
     code: bytes,
     *,
@@ -283,6 +287,7 @@ def minify(
     width: int = DEFAULT_WIDTH,
     level: Literal["light", "medium", "full"] = "medium",
     line_markers: bool = False,
+    check: bool = False,
 ) -> bytes:
     """Minify C++ code.
 
@@ -303,7 +308,27 @@ def minify(
     line structure survives) they stay real ``#line`` directives with
     exact numbers, so in-repo compiles report errors at the original
     header lines.
+
+    With ``check``, the output is lexed with clang's raw lexer and compared
+    against the input (see :func:`raw_token_stream`); a difference raises
+    :class:`MinifyCheckError`.
     """
+    out = _minify(
+        code, compiler=compiler, width=width, level=level, line_markers=line_markers
+    )
+    if check and raw_token_stream(code) != raw_token_stream(out):
+        raise MinifyCheckError("minification changed the token stream")
+    return out
+
+
+def _minify(
+    code: bytes,
+    *,
+    compiler: str,
+    width: int,
+    level: Literal["light", "medium", "full"],
+    line_markers: bool,
+) -> bytes:
     uncommented = _uncomment(code, compiler=compiler)
     prelude = (
         [b"#include <%s>" % BITS_STDCXX_H.encode()]
