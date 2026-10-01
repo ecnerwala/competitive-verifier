@@ -6,6 +6,7 @@ import os
 import pathlib
 import re
 import shutil
+from collections.abc import Sequence
 from logging import getLogger
 from typing import Any
 
@@ -308,6 +309,7 @@ class Bundler:
     pragma_once_system: set[str]
     result_lines: list[bytes]
     system_include_lines: list[bytes]
+    hoist_system_includes: bool
     path_stack: set[pathlib.Path]
     compiler: str
 
@@ -316,7 +318,18 @@ class Bundler:
         *,
         iquotes: list[pathlib.Path] | None = None,
         compiler: str = os.environ.get("CXX", "g++"),
+        prelude_includes: Sequence[str] = (),
+        hoist_system_includes: bool = False,
     ) -> None:
+        """Inline quoted includes of the files passed to :meth:`update`.
+
+        :param prelude_includes: system headers emitted at the top of the bundle
+            before any source, as if every bundled file started with
+            ``#include <...>`` of them; later includes they subsume are dropped.
+        :param hoist_system_includes: collect top-level ``#include <...>`` lines
+            into a single block at the top of the bundle instead of leaving them
+            in place.
+        """
         if iquotes is None:
             iquotes = []
         self.iquotes = iquotes
@@ -324,15 +337,41 @@ class Bundler:
         self.pragma_once_system = set()
         self.result_lines = []
         self.system_include_lines = []
+        self.hoist_system_includes = hoist_system_includes
         self.path_stack = set()
         self.compiler = compiler
+        for included in prelude_includes:
+            if self._record_system_include(included):
+                self._emit_system_include_at_top(included)
 
-    # Top-level system includes are hoisted into a single block at the top of
-    # the bundle (they are order-independent and deduplicated globally, so
-    # this keeps the output tidy); a #line marker replaces each one to keep
-    # the numbering of the following lines correct.
-    def _hoist_system_include(self, included: str) -> None:
+    def _emit_system_include_at_top(self, included: str) -> None:
         self.system_include_lines.append(f"#include <{included}>\n".encode())
+
+    # Returns whether a top-level #include <included> must be kept: false if it
+    # was already included or an umbrella header (bits/stdc++.h etc.) covering
+    # it was.
+    def _record_system_include(self, included: str) -> bool:
+        if included in self.pragma_once_system:
+            return False
+        if (
+            included in C_STANDARD_LIBS
+            or included in CXX_STANDARD_LIBS
+            or included in CXX_C_ORIGIN_LIBS
+        ):
+            umbrella = BITS_STDCXX_H
+        elif included in EXT_LIBS:
+            umbrella = BITS_EXTCXX_H
+        elif included in TR1_LIBS:
+            umbrella = BITS_STDTR1CXX_H
+        else:
+            # possibly: bits/*, tr2/* boost/*, c-posix library, etc.
+            umbrella = None
+        if umbrella is not None and umbrella in self.pragma_once_system:
+            return False
+        self.pragma_once_system.add(included)
+        if included in [BITS_EXTCXX_H, BITS_STDTR1CXX_H]:
+            self.pragma_once_system.add(BITS_STDCXX_H)
+        return True
 
     # これをしないと __FILE__ や __LINE__ が壊れる
     def _line(self, line: int, path: pathlib.Path) -> None:
@@ -504,32 +543,13 @@ class Bundler:
                     elif not is_toplevel:
                         # #pragma once 系の判断ができない場合はそっとしておく
                         self.result_lines.append(line)
-                    elif (
-                        included in C_STANDARD_LIBS
-                        or included in CXX_STANDARD_LIBS
-                        or included in CXX_C_ORIGIN_LIBS
-                    ):
-                        if BITS_STDCXX_H not in self.pragma_once_system:
-                            self.pragma_once_system.add(included)
-                            self._hoist_system_include(included)
+                    elif not self._record_system_include(included):
                         self._line(i + 2, path)
-                    elif included in EXT_LIBS:
-                        if BITS_EXTCXX_H not in self.pragma_once_system:
-                            self.pragma_once_system.add(included)
-                            self._hoist_system_include(included)
-                        self._line(i + 2, path)
-                    elif included in TR1_LIBS:
-                        if BITS_STDTR1CXX_H not in self.pragma_once_system:
-                            self.pragma_once_system.add(included)
-                            self._hoist_system_include(included)
+                    elif self.hoist_system_includes:
+                        self._emit_system_include_at_top(included)
                         self._line(i + 2, path)
                     else:
-                        # possibly: bits/*, tr2/* boost/*, c-posix library, etc.
-                        self.pragma_once_system.add(included)
-                        self._hoist_system_include(included)
-                        self._line(i + 2, path)
-                        if included in [BITS_EXTCXX_H, BITS_STDTR1CXX_H]:
-                            self.pragma_once_system.add(BITS_STDCXX_H)
+                        self.result_lines.append(line)
                     continue
 
                 # #include "..."
