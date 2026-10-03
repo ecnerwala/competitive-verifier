@@ -1,4 +1,5 @@
 import shutil
+import textwrap
 from typing import Any
 
 import pytest
@@ -14,6 +15,46 @@ class CppWithoutConfigData(IntegrationData):
     @classmethod
     def input_name(cls) -> str:
         return "CppData"
+
+    def assert_oj_resolve(self):
+        bundled = self.config_dir_path / "bundled/aplusb.test.cpp"
+        assert bundled.read_text(encoding="utf-8") == textwrap.dedent(
+            """\
+            #line 1 "aplusb.test.cpp"
+            #define PROBLEM "https://judge.yosupo.jp/problem/aplusb"
+            #pragma GCC target("avx2")
+            #include <iostream>
+            #line 1 "macros.hpp"
+            // competitive-verifier: EXTRA_ATTR
+            // competitive-verifier: EXTRA_ATTR_VAL text
+            #line 4 "macros.hpp"
+            #define OUT(v) cout << v << endl
+            #line 1 "aplusb.hpp"
+
+
+            #include <algorithm>
+            #include <vector>
+
+            int aplusb(int a, int b)
+            {
+                return a + b;
+            }
+
+
+            #line 6 "aplusb.test.cpp"
+            using namespace std;
+
+            int main()
+            {
+                int a, b;
+                cin >> a >> b;
+
+                int c = aplusb(a, b);
+                OUT(c);
+                return 0;
+            }
+            """
+        )
 
     def expected_verify_json(self) -> dict[str, Any]:
         return {

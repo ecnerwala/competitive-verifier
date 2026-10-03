@@ -1,4 +1,5 @@
 #define PROBLEM "https://judge.yosupo.jp/problem/aplusb"
+#pragma GCC target("avx2")
 #include <iostream>
 #include "macros.hpp"
 #include "aplusb.hpp"

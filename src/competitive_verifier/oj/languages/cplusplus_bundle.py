@@ -253,23 +253,77 @@ def _get_uncommented_code(
 
 def get_uncommented_code(
     path: pathlib.Path, *, iquotes: list[pathlib.Path], compiler: str
-) -> bytes:
+) -> list[list[bytes]]:
+    """The output of ``g++ -fpreprocessed -dD -E`` grouped by source line.
+
+    Element i holds every output line the compiler attributed to source line
+    i + 1: the line itself with comments removed, or nothing for a comment-only
+    line. With -dD the compiler also dumps the macro state changed by
+    ``#pragma GCC target`` as ``#define``/``#undef`` lines attributed to the
+    line after the pragma, so a line can have several entries.
+    """
     iquotes_options: list[str] = []
     for iquote in iquotes:
         iquotes_options.extend(["-I", str(iquote.resolve())])
     code = _get_uncommented_code(
         path.resolve(), iquotes_options=tuple(iquotes_options), compiler=compiler
     )
-    lines: list[bytes] = []
+    return group_preprocessed_lines(code, path.read_bytes())
+
+
+def group_preprocessed_lines(code: bytes, source: bytes) -> list[list[bytes]]:
+    """Group preprocessor output lines by the source line they belong to.
+
+    Replays the linemarkers like the compiler's own line counter: a marker
+    moves the position, every other line is attributed to the position.
+    """
+    groups: list[list[bytes]] = [[] for _ in source.splitlines()]
+    pos = 0
     for line in code.splitlines(keepends=True):
         m = re.match(rb'# (\d+) ".*"', line.rstrip())
         if m:
-            lineno = int(m.group(1))
-            while len(lines) + 1 < lineno:
-                lines.append(b"\n")
-        else:
-            lines.append(line)
-    return b"".join(lines)
+            pos = int(m.group(1)) - 1
+            continue
+        if pos < len(groups):
+            groups[pos].append(line)
+        pos += 1
+    return groups
+
+
+def pair_source_lines(
+    source: bytes, groups: list[list[bytes]]
+) -> list[tuple[tuple[int, bytes] | None, bytes]]:
+    """Pair the output lines with the source lines whose text they are.
+
+    Yields every output line in order, paired with ``(i, line)`` if it is
+    source line ``i`` (0-based) with comments removed and with None
+    otherwise; a source line without such an output line is paired with
+    b"". The compiler writes the line itself after anything it dumps at
+    that position, so the last output line whose non-whitespace characters
+    occur in order in the source line is taken as its text.
+    """
+    pairs: list[tuple[tuple[int, bytes] | None, bytes]] = []
+    for i, (line, writes) in enumerate(
+        zip(source.splitlines(keepends=True), groups, strict=True)
+    ):
+        own = next(
+            (
+                j
+                for j in reversed(range(len(writes)))
+                if _is_subsequence(writes[j], line)
+            ),
+            None,
+        )
+        for j, w in enumerate(writes):
+            pairs.append(((i, line), w) if j == own else (None, w))
+        if own is None:
+            pairs.append(((i, line), b""))
+    return pairs
+
+
+def _is_subsequence(needle: bytes, haystack: bytes) -> bool:
+    chars = iter(re.sub(rb"\s+", b"", haystack))
+    return all(c in chars for c in re.sub(rb"\s+", b"", needle))
 
 
 class BundleError(Exception):
@@ -358,18 +412,15 @@ class Bundler:
             include_guard_endif_found = False
             preprocess_if_nest = 0
 
-            lines = code.splitlines(keepends=True)
             uncommented_lines = get_uncommented_code(
                 path, iquotes=self.iquotes, compiler=self.compiler
-            ).splitlines(keepends=True)
-            uncommented_lines.extend(
-                [b""] * (len(lines) - len(uncommented_lines))
-            )  # trailing comment lines are removed
-            assert len(lines) == len(uncommented_lines)
+            )
             self._line(1, path)
-            for i, (line, uncommented_line) in enumerate(
-                zip(lines, uncommented_lines, strict=False)
-            ):
+            i = -1
+            for source, uncommented_line in pair_source_lines(code, uncommented_lines):
+                line = None
+                if source is not None:
+                    i, line = source
                 # nest の処理
                 if re.match(rb"\s*#\s*(if|ifdef|ifndef)\s.*", uncommented_line):
                     preprocess_if_nest += 1
@@ -387,7 +438,7 @@ class Bundler:
                 )
 
                 # #pragma once
-                if re.match(
+                if line is not None and re.match(
                     rb"\s*#\s*pragma\s+once\s*", line
                 ):  # #pragma once は comment 扱いで消されてしまう
                     logger.debug("%s: line %s: #pragma once", path, i + 1)
@@ -453,7 +504,7 @@ class Bundler:
                     self.result_lines.append(b"\n")
                     continue
 
-                if uncommented_line and not re.match(rb"^\s*$", uncommented_line):
+                if uncommented_line.strip():
                     non_guard_line_found = True
                     if (
                         include_guard_macro is not None
@@ -469,7 +520,7 @@ class Bundler:
 
                 # #include <...>
                 matched = re.match(rb"\s*#\s*include\s*<(.*)>\s*", uncommented_line)
-                if matched:
+                if matched and line is not None:
                     included = matched.group(1).decode()
                     logger.debug(
                         "%s: line %s: #include <%s>", path, i + 1, str(included)
@@ -511,7 +562,7 @@ class Bundler:
 
                 # #include "..."
                 matched = re.match(rb'\s*#\s*include\s*"(.*)"\s*', uncommented_line)
-                if matched:
+                if matched and line is not None:
                     included = matched.group(1).decode()
                     logger.debug('%s: line %s: #include "%s"', path, i + 1, included)
                     if not is_toplevel:
@@ -530,10 +581,11 @@ class Bundler:
                     continue
 
                 # otherwise
-                self.result_lines.append(line)
+                if line is not None:
+                    self.result_lines.append(line)
 
             # #if #endif の対応が壊れてたら諦める
-            last_index = i + 1  # pyright: ignore[reportPossiblyUnboundVariable]
+            last_index = i + 1
 
             if preprocess_if_nest != 0:
                 raise BundleErrorAt(
