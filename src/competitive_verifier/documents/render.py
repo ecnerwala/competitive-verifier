@@ -35,12 +35,15 @@ from .front_matter import FrontMatter, Markdown
 from .render_data import (
     CategorizedIndex,
     CodePageData,
+    CoverageMetric,
+    CoverageSummary,
     Dependency,
     EmbeddedCode,
     EnvTestcaseResult,
     IndexFiles,
     IndexRenderData,
     MultiCodePageData,
+    PageCoverage,
     PageRenderData,
     RenderLink,
     StatusIcon,
@@ -323,6 +326,7 @@ class RenderJob(ABC):
         result: VerifyCommandResult,
         config: ConfigYaml,
         index_md: Markdown | None = None,
+        coverage: dict[pathlib.Path, "PageCoverage"] | None = None,
     ) -> list["RenderJob"]:
         def plain_content(source: pathlib.Path) -> RenderJob | None:
             if source.suffix == ".md":
@@ -389,6 +393,7 @@ class RenderJob(ABC):
                 verifications=verifications,
                 result=result,
                 page_jobs=page_jobs,
+                coverage=coverage.get(source) if coverage else None,
             )
 
             if pj.display == DocumentOutputMode.never:
@@ -460,6 +465,7 @@ class PageRenderJob(RenderJob):
     verifications: VerificationInput
     result: VerifyCommandResult
     page_jobs: dict[pathlib.Path, "PageRenderJob"]
+    coverage: "PageCoverage | None" = None
 
     @property
     def is_verification(self):
@@ -496,6 +502,7 @@ class PageRenderJob(RenderJob):
             filename=self.source_path.relative_to(self.group_dir).as_posix(),
             title=self.front_matter.title,
             icon=self.stat.verification_status,
+            coverage=self.coverage.lines if self.coverage else None,
         )
 
     @cached_property
@@ -577,6 +584,7 @@ class PageRenderJob(RenderJob):
                 if self.stat.verification_results
                 else None
             ),
+            coverage=self.coverage,
             verification_status=self.stat.verification_status,
             is_verification_file=self.stat.is_verification,
             is_failed=self.stat.verification_status.is_failed,
@@ -771,4 +779,29 @@ class IndexRenderJob(RenderJob):
                     categories=_build_categories_list(verification_categories),
                 ),
             ],
+            coverage=self.total_coverage(),
+        )
+
+    def total_coverage(self) -> CoverageSummary | None:
+        def _sum(metrics: list[CoverageMetric]) -> CoverageMetric | None:
+            if not metrics:
+                return None
+            covered = sum(m.covered for m in metrics)
+            excluded = sum(m.excluded for m in metrics)
+            total = sum(m.total for m in metrics)
+            return CoverageMetric(
+                covered=covered,
+                excluded=excluded,
+                total=total,
+                rate=covered / total if total else 1.0,
+            )
+
+        coverages = [job.coverage for job in self.page_jobs.values() if job.coverage]
+        lines = _sum([c.lines for c in coverages])
+        if lines is None:
+            return None
+        return CoverageSummary(
+            lines=lines,
+            functions=_sum([c.functions for c in coverages if c.functions]),
+            branches=_sum([c.branches for c in coverages if c.branches]),
         )

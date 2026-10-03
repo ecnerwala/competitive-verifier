@@ -3,7 +3,7 @@ import enum
 from collections.abc import Sequence
 from typing import Annotated, Any
 
-from pydantic import BaseModel, ConfigDict, PlainSerializer, model_validator
+from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, model_validator
 from pydantic.alias_generators import to_camel
 
 from competitive_verifier.models import ForcePosixPath, SortedPathList, TestcaseResult
@@ -53,11 +53,20 @@ class RenderBaseModel(BaseModel):
     )
 
 
+class CoverageMetric(RenderBaseModel):
+    covered: int
+    excluded: int
+    total: int
+    rate: float
+
+
 class RenderLink(RenderBaseModel):
     path: ForcePosixPath
     filename: str
     icon: StatusIcon
     title: str | None = None
+    coverage: CoverageMetric | None = None
+    """Line coverage of the linked page."""
 
     @model_validator(mode="after")
     def validate_title(self: "RenderLink") -> "RenderLink":
@@ -78,6 +87,22 @@ class EmbeddedCode(RenderBaseModel):
 
 class EnvTestcaseResult(RenderBaseModel, TestcaseResult):
     environment: str | None
+
+
+class CoverageCount(RenderBaseModel):
+    line: int
+    count: int
+    branch_counts: list[int] = Field(default_factory=list[int])
+    """Execution count of each branch on the line."""
+
+
+class PageCoverage(RenderBaseModel):
+    lines: CoverageMetric
+    functions: CoverageMetric | None = None
+    branches: CoverageMetric | None = None
+    line_counts: list[CoverageCount]
+    """Execution count of each executable line."""
+    excluded_lines: list[int]
 
 
 class CategorizedIndex(RenderBaseModel):
@@ -102,6 +127,7 @@ class PageRenderData(RenderBaseModel):
     ]
     attributes: dict[str, Any]
     testcases: list[EnvTestcaseResult] | None = None
+    coverage: PageCoverage | None = None
 
     is_failed: bool
     is_verification_file: bool
@@ -127,5 +153,13 @@ class MultiCodePageData(RenderBaseModel):
     dependencies: list[Dependency]
 
 
+class CoverageSummary(RenderBaseModel):
+    lines: CoverageMetric
+    functions: CoverageMetric | None = None
+    branches: CoverageMetric | None = None
+
+
 class IndexRenderData(RenderBaseModel):
     top: list[IndexFiles]
+    coverage: CoverageSummary | None = None
+    """Aggregate coverage over all pages with coverage data."""

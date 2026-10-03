@@ -1,7 +1,7 @@
 {%- for dep in include.data.dependencies -%}
 {%- if dep.files.size != 0 -%}
 <h2>{{dep.type}}</h2>
-<ul>
+<ul class="index-files">
     {%- for item in dep.files -%}
     {%- if item.title -%}
         {%- capture link_title -%}{{item.title | xml_escape }} <small>({{ item.path | xml_escape }})</small>{%- endcapture -%}

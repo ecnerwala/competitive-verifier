@@ -2,7 +2,13 @@
 
 {{ include.header }}
 
-{%- include code.html extension=include.data.pathExtension embedded=include.data.embedded -%}
+{%- if include.data.coverage -%}
+{%- assign coverage_report_page = site.data.coverage_pages[include.data.path] -%}
+{%- if coverage_report_page %}{% assign coverage_report_href = coverage_report_page | relative_url %}{% else %}{% assign coverage_report_href = nil %}{% endif -%}
+{%- include coverage_summary.html coverage=include.data.coverage report_href=coverage_report_href -%}
+{%- endif -%}
+
+{%- include code.html extension=include.data.pathExtension embedded=include.data.embedded coverage=include.data.coverage -%}
 
 {%- if include.data.testcases and include.data.testcases.size != 0 -%}
 {% assign test_cases_tag = include.test_cases_tag | default: 'h2' %}
