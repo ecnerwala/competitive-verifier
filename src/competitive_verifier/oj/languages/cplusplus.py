@@ -18,6 +18,7 @@ from competitive_verifier.log import GitHubMessageParams
 from . import special_comments
 from .base import Language, LanguageEnvironment, OjVerifyLanguageConfig
 from .cplusplus_bundle import Bundler
+from .cplusplus_minify import minify
 
 # ruff: noqa: N803
 
@@ -326,6 +327,9 @@ class CPlusPlusLanguage(Language):
         )
         bundler.update(path)
         return bundler.get()
+
+    def minify_bundled(self, bundled_code: bytes) -> bytes | None:
+        return minify(bundled_code)
 
     def list_environments(
         self, path: pathlib.Path, *, basedir: pathlib.Path
